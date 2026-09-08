@@ -9,10 +9,12 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 
 /**
@@ -56,6 +58,35 @@ public class GlobalExceptionHandler {
         String message = first != null ? first.getDefaultMessage() : "Dữ liệu không hợp lệ";
         String field = first != null ? first.getField() : null;
         return build(ErrorCode.VALIDATION_ERROR, message, field, ex, false);
+    }
+
+    /**
+     * Body that Jackson could not read at all: malformed JSON, a bad enum value, an unparseable
+     * timestamp, or a non UTF-8 payload.
+     *
+     * <p>This is the caller getting the request wrong, so it belongs in the 400 family. Without
+     * this handler it falls through to the catch-all and is reported as an internal server error,
+     * which sends the user looking for a fault that is not there.
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUnreadableBody(HttpMessageNotReadableException ex) {
+        return build(
+                ErrorCode.VALIDATION_ERROR,
+                "Dữ liệu gửi lên không đọc được. Kiểm tra lại định dạng JSON và mã hóa UTF-8.",
+                null,
+                ex,
+                false);
+    }
+
+    /** A query parameter or path variable that could not be converted to its declared type. */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<Void>> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        return build(
+                ErrorCode.VALIDATION_ERROR,
+                "Giá trị không hợp lệ cho tham số " + ex.getName(),
+                ex.getName(),
+                ex,
+                false);
     }
 
     @ExceptionHandler(NoHandlerFoundException.class)

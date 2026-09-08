@@ -105,7 +105,9 @@ public class TaskService {
         task.restore();
         Task restored = taskRepository.save(task);
 
-        for (Task subtask : taskRepository.findSubtasks(id)) {
+        // Must include deleted rows: these subtasks were soft deleted alongside the parent, so the
+        // live query can no longer see the very rows that need bringing back.
+        for (Task subtask : taskRepository.findSubtasksIncludingDeleted(id)) {
             subtask.restore();
             taskRepository.save(subtask);
         }

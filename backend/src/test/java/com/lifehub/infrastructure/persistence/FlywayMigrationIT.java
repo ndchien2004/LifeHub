@@ -30,20 +30,44 @@ class FlywayMigrationIT {
     @Autowired
     private DataSource dataSource;
 
+    /**
+     * The migration count grows by one each phase. Asserting the exact set, rather than merely
+     * that some migrations ran, is what catches a migration accidentally renamed, dropped or
+     * duplicated - the failure mode that becomes unrecoverable once a user has run the old version.
+     */
     @Test
-    @DisplayName("T0-05 — bảng setting tồn tại và flyway_schema_history có đúng 1 dòng")
+    @DisplayName("T0-05 — mọi migration đã chạy thành công, đúng số lượng của phase hiện tại")
     void migrationCreatedTheCoreSchema() throws Exception {
         try (Connection connection = dataSource.getConnection()) {
             assertThat(tableExists(connection, "setting")).isTrue();
             assertThat(tableExists(connection, "flyway_schema_history")).isTrue();
 
             assertThat(scalar(connection, "SELECT COUNT(*) FROM flyway_schema_history"))
-                    .as("Phase 0 chỉ có V1")
-                    .isEqualTo("1");
-            assertThat(scalar(connection, "SELECT version FROM flyway_schema_history ORDER BY installed_rank"))
-                    .isEqualTo("1");
-            assertThat(scalar(connection, "SELECT success FROM flyway_schema_history ORDER BY installed_rank"))
-                    .isIn("1", "true");
+                    .as("Phase 0 có V1, Phase 1 thêm V2")
+                    .isEqualTo("2");
+            assertThat(scalar(connection,
+                            "SELECT GROUP_CONCAT(version) FROM "
+                                    + "(SELECT version FROM flyway_schema_history ORDER BY installed_rank)"))
+                    .isEqualTo("1,2");
+            assertThat(scalar(connection, "SELECT COUNT(*) FROM flyway_schema_history WHERE success = 0"))
+                    .as("không migration nào được phép thất bại")
+                    .isEqualTo("0");
+        }
+    }
+
+    @Test
+    @DisplayName("V2 tạo đủ bảng module Task kèm index bắt buộc")
+    void migrationCreatedTheTaskModule() throws Exception {
+        try (Connection connection = dataSource.getConnection()) {
+            assertThat(tableExists(connection, "project")).isTrue();
+            assertThat(tableExists(connection, "task")).isTrue();
+            assertThat(tableExists(connection, "tag")).isTrue();
+            assertThat(tableExists(connection, "task_tag")).isTrue();
+
+            assertThat(scalar(connection,
+                            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name IN "
+                                    + "('idx_task_due','idx_task_status','idx_task_project','idx_tag_name')"))
+                    .isEqualTo("4");
         }
     }
 
