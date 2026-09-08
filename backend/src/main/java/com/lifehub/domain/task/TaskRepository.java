@@ -19,8 +19,16 @@ public interface TaskRepository {
 
     List<Task> findAllById(List<String> ids);
 
-    /** Direct children of a task, ordered by sort order. Only ever one level deep (FR-TSK-11). */
+    /** Live children of a task, ordered by sort order. Only ever one level deep (FR-TSK-11). */
     List<Task> findSubtasks(String parentId);
+
+    /**
+     * Children of a task including soft deleted ones.
+     *
+     * <p>Restore needs this: the subtasks were soft deleted alongside their parent, so the live
+     * query can no longer see the very rows that have to be brought back.
+     */
+    List<Task> findSubtasksIncludingDeleted(String parentId);
 
     Page<Task> search(TaskFilter filter, PageRequest pageRequest);
 

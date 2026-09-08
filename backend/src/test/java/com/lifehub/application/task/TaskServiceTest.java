@@ -56,6 +56,7 @@ class TaskServiceTest {
         service = new TaskService(taskRepository, projectRepository, tagRepository, clock);
         when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(taskRepository.findSubtasks(anyString())).thenReturn(List.of());
+        when(taskRepository.findSubtasksIncludingDeleted(anyString())).thenReturn(List.of());
     }
 
     @Test
@@ -208,12 +209,26 @@ class TaskServiceTest {
         parent.softDelete(NOW);
         child.softDelete(NOW);
         when(taskRepository.findByIdIncludingDeleted("p1")).thenReturn(Optional.of(parent));
-        when(taskRepository.findSubtasks("p1")).thenReturn(List.of(child));
+        // Restore has to look at deleted children: the live subtask query cannot see them.
+        when(taskRepository.findSubtasksIncludingDeleted("p1")).thenReturn(List.of(child));
 
         service.restore("p1");
 
         assertThat(parent.isDeleted()).isFalse();
-        assertThat(child.isDeleted()).isTrue();
+        assertThat(child.isDeleted()).as("subtask phải sống lại cùng cha").isFalse();
+    }
+
+    @Test
+    @DisplayName("Khôi phục dùng truy vấn subtask bao gồm bản ghi đã xóa, không phải truy vấn thường")
+    void looksUpDeletedSubtasksWhenRestoring() {
+        Task parent = new Task("Chuẩn bị release");
+        parent.softDelete(NOW);
+        when(taskRepository.findByIdIncludingDeleted("p1")).thenReturn(Optional.of(parent));
+
+        service.restore("p1");
+
+        verify(taskRepository).findSubtasksIncludingDeleted("p1");
+        verify(taskRepository, never()).findSubtasks("p1");
     }
 
     @Test

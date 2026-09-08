@@ -31,8 +31,21 @@ public class ProjectRepositoryAdapter implements ProjectRepository {
         return includeArchived ? delegate.findAllLive() : delegate.findAllActive();
     }
 
+    /**
+     * Case insensitive name check.
+     *
+     * <p>Compared in Java for the same reason as tags: SQLite {@code LOWER()} is ASCII only and
+     * leaves accented Vietnamese characters unchanged, so two names differing only in case would
+     * both be accepted.
+     */
     @Override
     public boolean existsByName(String name, String excludingId) {
-        return delegate.existsByName(name, excludingId);
+        if (name == null || name.isBlank()) {
+            return false;
+        }
+        String candidate = name.trim();
+        return delegate.findAllLive().stream()
+                .anyMatch(project ->
+                        !project.getId().equals(excludingId) && project.getName().equalsIgnoreCase(candidate));
     }
 }

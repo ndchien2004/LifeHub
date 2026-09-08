@@ -17,6 +17,9 @@ public interface SpringDataTaskRepository
             + "ORDER BY t.sortOrder ASC, t.createdAt ASC")
     List<Task> findSubtasks(@Param("parentId") String parentId);
 
+    @Query("SELECT t FROM Task t WHERE t.parent.id = :parentId ORDER BY t.sortOrder ASC, t.createdAt ASC")
+    List<Task> findSubtasksIncludingDeleted(@Param("parentId") String parentId);
+
     @Query("SELECT COUNT(t) FROM Task t WHERE t.project.id = :projectId AND t.deletedAt IS NULL")
     long countByProject(@Param("projectId") String projectId);
 

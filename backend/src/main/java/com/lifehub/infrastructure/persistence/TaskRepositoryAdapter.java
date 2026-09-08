@@ -56,6 +56,11 @@ public class TaskRepositoryAdapter implements TaskRepository {
     }
 
     @Override
+    public List<Task> findSubtasksIncludingDeleted(String parentId) {
+        return delegate.findSubtasksIncludingDeleted(parentId);
+    }
+
+    @Override
     public Page<Task> search(TaskFilter filter, PageRequest pageRequest) {
         org.springframework.data.domain.PageRequest springPage =
                 org.springframework.data.domain.PageRequest.of(

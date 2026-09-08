@@ -1,23 +1,34 @@
 import type { ReactNode } from 'react'
-import { CalendarDays, LayoutDashboard, ListTodo, Settings, Wallet } from 'lucide-react'
+import { CalendarDays, FolderKanban, LayoutDashboard, ListTodo, Settings, Wallet } from 'lucide-react'
 import { ThemeToggle } from '@/shared/components/ThemeToggle'
+import { useNavStore, type Route } from '@/shared/stores/navStore'
 import { cn } from '@/shared/lib/utils'
 
 /**
  * Application shell: fixed sidebar plus main area.
  *
- * Every section other than Dashboard is disabled — each one lights up in the phase that
- * builds it, so the sidebar doubles as a visible map of what is finished.
+ * <p>Sections not yet built are disabled and labelled with the phase that delivers them, so the
+ * sidebar doubles as a visible map of what is finished.
  */
-const NAV_ITEMS = [
-  { label: 'Tổng quan', Icon: LayoutDashboard, enabled: true, phase: null },
-  { label: 'Công việc', Icon: ListTodo, enabled: false, phase: 1 },
-  { label: 'Lịch', Icon: CalendarDays, enabled: false, phase: 2 },
-  { label: 'Tài chính', Icon: Wallet, enabled: false, phase: 3 },
-  { label: 'Cài đặt', Icon: Settings, enabled: false, phase: 4 },
-] as const
+const NAV_ITEMS: {
+  route: Route
+  label: string
+  Icon: typeof LayoutDashboard
+  enabled: boolean
+  phase: number | null
+}[] = [
+  { route: 'dashboard', label: 'Tổng quan', Icon: LayoutDashboard, enabled: true, phase: null },
+  { route: 'tasks', label: 'Công việc', Icon: ListTodo, enabled: true, phase: null },
+  { route: 'projects', label: 'Dự án & Nhãn', Icon: FolderKanban, enabled: true, phase: null },
+  { route: 'calendar', label: 'Lịch', Icon: CalendarDays, enabled: false, phase: 2 },
+  { route: 'finance', label: 'Tài chính', Icon: Wallet, enabled: false, phase: 3 },
+  { route: 'settings', label: 'Cài đặt', Icon: Settings, enabled: false, phase: 4 },
+]
 
 export function AppLayout({ children }: { children: ReactNode }) {
+  const route = useNavStore((state) => state.route)
+  const navigate = useNavStore((state) => state.navigate)
+
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       <aside className="flex w-60 shrink-0 flex-col border-r border-border bg-card">
@@ -26,28 +37,33 @@ export function AppLayout({ children }: { children: ReactNode }) {
         </div>
 
         <nav className="flex-1 space-y-1 p-3" aria-label="Điều hướng chính">
-          {NAV_ITEMS.map(({ label, Icon, enabled, phase }) => (
-            <button
-              key={label}
-              type="button"
-              disabled={!enabled}
-              title={enabled ? label : `${label} — có từ Phase ${phase}`}
-              className={cn(
-                'flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
-                enabled
-                  ? 'bg-accent font-medium text-accent-foreground'
-                  : 'cursor-not-allowed text-muted-foreground/60',
-              )}
-            >
-              <Icon className="h-4 w-4 shrink-0" aria-hidden />
-              <span className="flex-1 text-left">{label}</span>
-              {!enabled && (
-                <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums">
-                  P{phase}
-                </span>
-              )}
-            </button>
-          ))}
+          {NAV_ITEMS.map(({ route: target, label, Icon, enabled, phase }) => {
+            const active = route === target
+            return (
+              <button
+                key={target}
+                type="button"
+                disabled={!enabled}
+                aria-current={active ? 'page' : undefined}
+                title={enabled ? label : `${label} — có từ Phase ${phase}`}
+                onClick={() => navigate(target)}
+                className={cn(
+                  'flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
+                  !enabled && 'cursor-not-allowed text-muted-foreground/60',
+                  enabled && active && 'bg-accent font-medium text-accent-foreground',
+                  enabled && !active && 'text-foreground hover:bg-accent/60',
+                )}
+              >
+                <Icon className="h-4 w-4 shrink-0" aria-hidden />
+                <span className="flex-1 text-left">{label}</span>
+                {!enabled && (
+                  <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums">
+                    P{phase}
+                  </span>
+                )}
+              </button>
+            )
+          })}
         </nav>
 
         <div className="border-t border-border p-3">
@@ -55,7 +71,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto">{children}</main>
+      <main className="min-w-0 flex-1 overflow-y-auto">{children}</main>
     </div>
   )
 }
