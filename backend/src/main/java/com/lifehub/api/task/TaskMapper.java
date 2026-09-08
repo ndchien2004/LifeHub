@@ -58,6 +58,7 @@ public class TaskMapper {
                 (int) counts.completed(),
                 subtasks == null ? null : subtasks.stream().map(this::toSummary).toList(),
                 task.getEstimateMinutes(),
+                task.getRrule(),
                 task.getSortOrder(),
                 toOffset(task.getCompletedAt()),
                 toOffset(task.getDeletedAt()),

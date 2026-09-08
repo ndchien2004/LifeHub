@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { TaskFormDialog } from './TaskFormDialog'
 import type { Task } from '../types'
+import { stubLifeHubBridge } from '@/test/lifehubBridge'
 
 /**
  * T1-13 — the form must catch an empty title without calling the API.
@@ -51,10 +52,7 @@ describe('TaskFormDialog', () => {
     fetchMock.mockReset()
     stubApi()
     vi.stubGlobal('fetch', fetchMock)
-    window.lifehub = {
-      getBackendInfo: vi.fn().mockResolvedValue({ port: 51234, token: 'test-token' }),
-      onBackendRestarted: vi.fn().mockReturnValue(() => {}),
-    }
+    stubLifeHubBridge()
   })
 
   it('T1-13 — tiêu đề rỗng hiện lỗi inline và KHÔNG gọi API', async () => {

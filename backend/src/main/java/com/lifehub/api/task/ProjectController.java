@@ -1,13 +1,12 @@
 package com.lifehub.api.task;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lifehub.api.common.ApiResponse;
+import com.lifehub.api.common.JsonPatchReader;
 import com.lifehub.api.task.TaskDtos.CreateProjectRequest;
 import com.lifehub.api.task.TaskDtos.ProjectResponse;
 import com.lifehub.application.task.ProjectService;
 import com.lifehub.application.task.TaskCommands.CreateProject;
-import com.lifehub.application.task.TaskCommands.Patch;
 import com.lifehub.application.task.TaskCommands.UpdateProject;
 import com.lifehub.application.task.TaskQueryService;
 import com.lifehub.domain.task.Project;
@@ -34,17 +33,17 @@ public class ProjectController {
     private final ProjectService projectService;
     private final TaskQueryService taskQueryService;
     private final TaskMapper mapper;
-    private final ObjectMapper objectMapper;
+    private final JsonPatchReader patches;
 
     public ProjectController(
             ProjectService projectService,
             TaskQueryService taskQueryService,
             TaskMapper mapper,
-            ObjectMapper objectMapper) {
+            JsonPatchReader patches) {
         this.projectService = projectService;
         this.taskQueryService = taskQueryService;
         this.mapper = mapper;
-        this.objectMapper = objectMapper;
+        this.patches = patches;
     }
 
     /** Each project carries its task totals so the UI can draw a progress bar (FR-PRJ-03). */
@@ -74,10 +73,10 @@ public class ProjectController {
     @PatchMapping("/{id}")
     public ApiResponse<ProjectResponse> update(@PathVariable String id, @RequestBody JsonNode body) {
         UpdateProject command = new UpdateProject(
-                patch(body, "name", String.class),
-                patch(body, "color", String.class),
-                patch(body, "description", String.class),
-                patch(body, "status", ProjectStatus.class));
+                patches.read(body, "name", String.class),
+                patches.read(body, "color", String.class),
+                patches.read(body, "description", String.class),
+                patches.read(body, "status", ProjectStatus.class));
 
         Project project = projectService.update(id, command);
         return ApiResponse.ok(mapper.toResponse(project, taskQueryService.countByProject(id)));
@@ -88,13 +87,5 @@ public class ProjectController {
     public ApiResponse<Void> delete(@PathVariable String id) {
         projectService.delete(id);
         return ApiResponse.ok(null);
-    }
-
-    private <T> Patch<T> patch(JsonNode body, String field, Class<T> type) {
-        if (body == null || !body.has(field)) {
-            return Patch.absent();
-        }
-        JsonNode node = body.get(field);
-        return node.isNull() ? Patch.of(null) : Patch.of(objectMapper.convertValue(node, type));
     }
 }

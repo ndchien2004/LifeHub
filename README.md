@@ -65,10 +65,19 @@ LifeHub/
 ## Trạng thái hiện tại
 
 **Phase 0 — Hạ tầng & khung sườn: xong.**
+**Phase 1 — Task & Project: xong.**
+**Phase 2 — Calendar & Reminder: xong.**
 
-Đang chạy được: Electron spawn backend, health check, splash screen, tự khởi động lại
-khi backend chết, SQLite + Flyway, filter token, endpoint `/bootstrap`, theme sáng/tối,
-log ra file.
+Đang chạy được:
+
+- **Hạ tầng** — Electron spawn backend, health check, splash screen, tự khởi động lại khi
+  backend chết, SQLite + Flyway, filter token, `/bootstrap`, theme sáng/tối, log ra file.
+- **Công việc** — CRUD task/project/nhãn, danh sách và Kanban kéo thả, lọc và tìm kiếm,
+  subtask một cấp, xóa mềm kèm hoàn tác.
+- **Lịch** — xem theo tháng/tuần/ngày, sự kiện lặp theo RRULE với bộ dựng trực quan, sửa hoặc
+  xóa một lần riêng lẻ trong chuỗi, cảnh báo trùng giờ, task đến hạn hiển thị ngay trên lịch.
+- **Nhắc hẹn** — thông báo hệ điều hành đẩy qua SSE, hoãn và tắt ngay trên thông báo, modal
+  tổng hợp nhắc hẹn bị lỡ khi mở lại app, thu nhỏ xuống system tray thay vì thoát.
 
 Xem `PROGRESS.md` để biết tiến độ đầy đủ và `docs/07-PHASE-PLAN.md` để biết phase kế tiếp.
 

@@ -22,6 +22,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <sqlite-jdbc.version>3.45.3.0</sqlite-jdbc.version>
     <uuid-generator.version>5.1.0</uuid-generator.version>
+    <ical4j.version>4.0.8</ical4j.version>
     <jacoco.version>0.8.12</jacoco.version>
   </properties>
 
@@ -65,6 +66,13 @@
       <groupId>com.fasterxml.uuid</groupId>
       <artifactId>java-uuid-generator</artifactId>
       <version>${uuid-generator.version}</version>
+    </dependency>
+
+    <!-- RRULE (RFC 5545) — 04-ARCHITECTURE.md 2 -->
+    <dependency>
+      <groupId>org.mnode.ical4j</groupId>
+      <artifactId>ical4j</artifactId>
+      <version>${ical4j.version}</version>
     </dependency>
 
     <dependency>

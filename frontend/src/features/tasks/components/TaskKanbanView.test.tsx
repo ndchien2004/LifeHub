@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useChangeTaskStatus } from '../hooks'
 import type { Task } from '../types'
 import { resolveStatusChange } from './TaskKanbanView'
+import { stubLifeHubBridge } from '@/test/lifehubBridge'
 
 /**
  * T1-14 — dropping a Kanban card must hit the dedicated status endpoint.
@@ -70,10 +71,9 @@ describe('useChangeTaskStatus — request thực tế gửi đi', () => {
       json: async () => ({ success: true, data: task('a', 'IN_PROGRESS') }),
     })
     vi.stubGlobal('fetch', fetchMock)
-    window.lifehub = {
+    stubLifeHubBridge({
       getBackendInfo: vi.fn().mockResolvedValue({ port: 51234, token: 'test-token' }),
-      onBackendRestarted: vi.fn().mockReturnValue(() => {}),
-    }
+    })
   })
 
   function wrapper({ children }: { children: ReactNode }) {

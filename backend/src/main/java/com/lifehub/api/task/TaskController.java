@@ -1,15 +1,14 @@
 package com.lifehub.api.task;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lifehub.api.common.ApiResponse;
+import com.lifehub.api.common.JsonPatchReader;
 import com.lifehub.api.common.PageResponse;
 import com.lifehub.api.task.TaskDtos.ChangeStatusRequest;
 import com.lifehub.api.task.TaskDtos.CreateTaskRequest;
 import com.lifehub.api.task.TaskDtos.ReorderRequest;
 import com.lifehub.api.task.TaskDtos.TaskResponse;
 import com.lifehub.application.task.TaskCommands.CreateTask;
-import com.lifehub.application.task.TaskCommands.Patch;
 import com.lifehub.application.task.TaskCommands.ReorderEntry;
 import com.lifehub.application.task.TaskCommands.UpdateTask;
 import com.lifehub.application.task.TaskQueryService;
@@ -23,7 +22,6 @@ import com.lifehub.domain.task.TaskFilter;
 import com.lifehub.domain.task.TaskRepository.Counts;
 import com.lifehub.domain.task.TaskStatus;
 import jakarta.validation.Valid;
-import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.Arrays;
 import java.util.List;
@@ -50,17 +48,17 @@ public class TaskController {
     private final TaskService taskService;
     private final TaskQueryService taskQueryService;
     private final TaskMapper mapper;
-    private final ObjectMapper objectMapper;
+    private final JsonPatchReader patches;
 
     public TaskController(
             TaskService taskService,
             TaskQueryService taskQueryService,
             TaskMapper mapper,
-            ObjectMapper objectMapper) {
+            JsonPatchReader patches) {
         this.taskService = taskService;
         this.taskQueryService = taskQueryService;
         this.mapper = mapper;
-        this.objectMapper = objectMapper;
+        this.patches = patches;
     }
 
     @GetMapping
@@ -114,7 +112,8 @@ public class TaskController {
                 request.projectId(),
                 request.parentId(),
                 request.tagIds(),
-                request.estimateMinutes()));
+                request.estimateMinutes(),
+                request.rrule()));
         return ApiResponse.ok(detailOf(created.getId()));
     }
 
@@ -128,14 +127,15 @@ public class TaskController {
     @PatchMapping("/{id}")
     public ApiResponse<TaskResponse> update(@PathVariable String id, @RequestBody JsonNode body) {
         UpdateTask command = new UpdateTask(
-                patch(body, "title", String.class),
-                patch(body, "description", String.class),
-                patch(body, "priority", Priority.class),
-                patch(body, "status", TaskStatus.class),
-                patchInstant(body, "dueAt"),
-                patch(body, "projectId", String.class),
-                patchStringList(body, "tagIds"),
-                patch(body, "estimateMinutes", Integer.class));
+                patches.read(body, "title", String.class),
+                patches.read(body, "description", String.class),
+                patches.read(body, "priority", Priority.class),
+                patches.read(body, "status", TaskStatus.class),
+                patches.readInstant(body, "dueAt"),
+                patches.read(body, "projectId", String.class),
+                patches.readList(body, "tagIds", String.class),
+                patches.read(body, "estimateMinutes", Integer.class),
+                patches.read(body, "rrule", String.class));
 
         taskService.update(id, command);
         return ApiResponse.ok(detailOf(id));
@@ -208,30 +208,5 @@ public class TaskController {
         } catch (IllegalArgumentException e) {
             throw new ValidationException("Giá trị không hợp lệ: " + value, field);
         }
-    }
-
-    private <T> Patch<T> patch(JsonNode body, String field, Class<T> type) {
-        if (body == null || !body.has(field)) {
-            return Patch.absent();
-        }
-        JsonNode node = body.get(field);
-        return node.isNull() ? Patch.of(null) : Patch.of(objectMapper.convertValue(node, type));
-    }
-
-    private Patch<Instant> patchInstant(JsonNode body, String field) {
-        Patch<OffsetDateTime> raw = patch(body, field, OffsetDateTime.class);
-        return raw.present() ? Patch.of(mapper.toInstant(raw.value())) : Patch.absent();
-    }
-
-    private Patch<List<String>> patchStringList(JsonNode body, String field) {
-        if (body == null || !body.has(field)) {
-            return Patch.absent();
-        }
-        JsonNode node = body.get(field);
-        if (node.isNull()) {
-            return Patch.of(List.of());
-        }
-        return Patch.of(objectMapper.convertValue(
-                node, objectMapper.getTypeFactory().constructCollectionType(List.class, String.class)));
     }
 }

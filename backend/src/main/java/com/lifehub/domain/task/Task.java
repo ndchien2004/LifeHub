@@ -52,6 +52,10 @@ public class Task extends BaseEntity {
     @Column(name = "estimate_minutes")
     private Integer estimateMinutes;
 
+    /** Repetition rule; null means the task happens once (FR-TSK-13). */
+    @Column(name = "rrule")
+    private String rrule;
+
     @Column(name = "sort_order", nullable = false)
     private int sortOrder;
 
@@ -115,6 +119,42 @@ public class Task extends BaseEntity {
 
     public void reorder(int sortOrder) {
         this.sortOrder = sortOrder;
+    }
+
+    /** Sets or clears the repetition rule (FR-TSK-13). Blank is stored as null. */
+    public void repeat(String rrule) {
+        this.rrule = rrule == null || rrule.isBlank() ? null : rrule.trim();
+    }
+
+    /**
+     * Whether completing this task should produce a successor (FR-TSK-13).
+     *
+     * <p>A deadline is required: the rule says how often, and only the deadline says from when.
+     * Subtasks are excluded because their successor would need a parent, and the one level rule of
+     * FR-TSK-11 leaves nowhere sensible to put it.
+     */
+    public boolean isRepeating() {
+        return rrule != null && dueAt != null && !isSubtask();
+    }
+
+    /**
+     * A fresh TODO copy of this task, due at the next occurrence (FR-TSK-13).
+     *
+     * <p>Everything the user configured carries over; everything the previous run accumulated -
+     * status, completion time, subtasks - does not. Tags are copied by reference, which is what
+     * makes the new instance show up under the same filters straight away.
+     */
+    public Task nextInstance(Instant nextDueAt, String nextRrule) {
+        Task next = new Task(title);
+        next.describe(description);
+        next.prioritise(priority);
+        next.schedule(nextDueAt);
+        next.estimate(estimateMinutes);
+        next.moveTo(project);
+        next.reorder(sortOrder);
+        next.replaceTags(tags);
+        next.repeat(nextRrule);
+        return next;
     }
 
     /**
@@ -229,6 +269,10 @@ public class Task extends BaseEntity {
 
     public int getSortOrder() {
         return sortOrder;
+    }
+
+    public String getRrule() {
+        return rrule;
     }
 
     public Instant getCompletedAt() {

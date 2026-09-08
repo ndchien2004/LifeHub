@@ -1,6 +1,9 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import path from 'node:path'
 import { BackendManager, type BackendInfo } from './backendManager'
+import { ReminderNotifier } from './reminderNotifier'
+import { ReminderStream, type ReminderNotification } from './reminderStream'
+import { createTray, type TrayController } from './tray'
 
 /**
  * Electron main process — application entry point.
@@ -27,17 +30,40 @@ const jarPath = isDev
 
 let mainWindow: BrowserWindow | null = null
 let splashWindow: BrowserWindow | null = null
+let tray: TrayController | null = null
+
+const reminderStream = new ReminderStream()
+
+const notifier = new ReminderNotifier({
+  onActivate: (reminder) => {
+    showMainWindow()
+    mainWindow?.webContents.send('app:navigate', {
+      route: reminder.refType === 'TASK' ? 'tasks' : 'calendar',
+      id: reminder.refId,
+    })
+  },
+  onFired: (reminder, shownNatively) => {
+    // The renderer always hears about it: it refreshes the calendar, and shows an in-app toast
+    // when the OS refused to (UC-04 exception E1).
+    mainWindow?.webContents.send('app:reminder-fired', { reminder, shownNatively })
+  },
+})
 
 const backend = new BackendManager({
   jarPath,
   dataDir,
   logDir,
   onRestarted: (info) => {
+    // A restart means a new port and a new token, so the push channel has to be retargeted too.
+    notifier.setBackendInfo(info)
+    reminderStream.start(info)
     mainWindow?.webContents.send('app:backend-restarted', info)
     mainWindow?.webContents.reload()
   },
   onFatal: (reason) => void showFatalError(reason),
 })
+
+reminderStream.on('reminder', (reminder: ReminderNotification) => notifier.show(reminder))
 
 function createSplashWindow(): BrowserWindow {
   const splash = new BrowserWindow({
@@ -99,15 +125,40 @@ async function bootstrap(): Promise<void> {
 
   console.log(`[main] backend ready on 127.0.0.1:${info.port}`)
 
+  notifier.setBackendInfo(info)
+  reminderStream.start(info)
+
   mainWindow = createMainWindow()
   mainWindow.once('ready-to-show', () => {
     splashWindow?.destroy()
     splashWindow = null
     mainWindow?.show()
   })
+
+  // FR-SYS-07: closing the window hides it instead of quitting, so reminders keep arriving.
+  // Only the tray menu and an explicit quit actually end the process.
+  mainWindow.on('close', (event) => {
+    if (!tray?.isQuitting()) {
+      event.preventDefault()
+      mainWindow?.hide()
+    }
+  })
   mainWindow.on('closed', () => {
     mainWindow = null
   })
+
+  tray ??= createTray(() => mainWindow)
+}
+
+function showMainWindow(): void {
+  if (!mainWindow) {
+    return
+  }
+  if (mainWindow.isMinimized()) {
+    mainWindow.restore()
+  }
+  mainWindow.show()
+  mainWindow.focus()
 }
 
 /** Offers the two things that actually help when startup fails: retry, or read the log. */
@@ -132,7 +183,7 @@ async function showFatalError(reason: string): Promise<void> {
   app.quit()
 }
 
-// IPC surface for Phase 0 (04-ARCHITECTURE.md §6.3).
+// IPC surface (04-ARCHITECTURE.md §6.3).
 ipcMain.handle('app:get-backend-info', () => {
   const info = backend.getInfo()
   if (!info) {
@@ -141,33 +192,43 @@ ipcMain.handle('app:get-backend-info', () => {
   return info
 })
 
+/**
+ * Whether the OS will display notifications for this app (UC-04 exception E1).
+ *
+ * Electron exposes support, not the user's permission setting, so a "granted" answer means the
+ * channel exists rather than that a toast is guaranteed to appear. The renderer treats it as the
+ * signal to stop duplicating every reminder as an in-app toast, which is the decision it actually
+ * needs to make.
+ */
+ipcMain.handle('notification:permission', () => (notifier.isSupported() ? 'granted' : 'denied'))
+
 // One instance only: two processes writing the same SQLite file is asking for trouble.
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
-  app.on('second-instance', () => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) {
-        mainWindow.restore()
-      }
-      mainWindow.focus()
-    }
-  })
+  // Launching again while it sits in the tray should bring the window back, not start a second app.
+  app.on('second-instance', showMainWindow)
 
   void app.whenReady().then(bootstrap)
 }
 
-app.on('window-all-closed', () => {
-  // Phase 2 replaces this with minimise-to-tray (FR-SYS-07).
-  if (process.platform !== 'darwin') {
-    app.quit()
-  }
-})
+// Deliberately not quitting here: the window is hidden to the tray rather than destroyed
+// (FR-SYS-07), and quitting on the last window closing would defeat that on every platform.
 
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     void bootstrap()
+  } else {
+    showMainWindow()
   }
 })
 
-app.on('before-quit', () => backend.stop())
+app.on('before-quit', () => {
+  // Covers a quit the app did not start - Cmd+Q, or the OS shutting down. Without this the close
+  // handler would keep hiding the window and the process would never exit.
+  tray?.markQuitting()
+  reminderStream.stop()
+  tray?.destroy()
+  tray = null
+  backend.stop()
+})
