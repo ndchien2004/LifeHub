@@ -4,9 +4,12 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.lifehub.api.calendar.CalendarDtos.ReminderResponse;
 import com.lifehub.api.calendar.CalendarMapper;
 import com.lifehub.api.common.ApiResponse;
+import com.lifehub.api.finance.FinanceDtos.BudgetAlertResponse;
+import com.lifehub.api.finance.FinanceMapper;
 import com.lifehub.application.calendar.ReminderService;
 import com.lifehub.application.system.BootstrapData;
 import com.lifehub.application.system.BootstrapService;
+import com.lifehub.application.system.DashboardData;
 import java.util.List;
 import java.util.Map;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,14 +24,17 @@ public class BootstrapController {
     private final BootstrapService bootstrapService;
     private final ReminderService reminderService;
     private final CalendarMapper calendarMapper;
+    private final FinanceMapper financeMapper;
 
     public BootstrapController(
             BootstrapService bootstrapService,
             ReminderService reminderService,
-            CalendarMapper calendarMapper) {
+            CalendarMapper calendarMapper,
+            FinanceMapper financeMapper) {
         this.bootstrapService = bootstrapService;
         this.reminderService = reminderService;
         this.calendarMapper = calendarMapper;
+        this.financeMapper = financeMapper;
     }
 
     @GetMapping("/bootstrap")
@@ -40,7 +46,20 @@ public class BootstrapController {
                 .toList();
 
         return ApiResponse.ok(new BootstrapResponse(
-                data.settings(), data.aiConfigured(), missed, data.dashboard()));
+                data.settings(), data.aiConfigured(), missed, toResponse(data.dashboard())));
+    }
+
+    private DashboardResponse toResponse(DashboardData dashboard) {
+        if (dashboard == null) {
+            return null;
+        }
+        return new DashboardResponse(
+                dashboard.todayTasks(),
+                dashboard.overdueTasks(),
+                dashboard.upcomingEvents(),
+                dashboard.monthExpense(),
+                dashboard.monthIncome(),
+                dashboard.budgetAlerts().stream().map(financeMapper::toResponse).toList());
     }
 
     /**
@@ -54,6 +73,16 @@ public class BootstrapController {
             Map<String, String> settings,
             boolean aiConfigured,
             List<ReminderResponse> missedReminders,
-            Object dashboard) {
+            DashboardResponse dashboard) {
+    }
+
+    /** Dashboard figures (FR-SYS-01), shaped exactly as 06-API-SPEC.md 2 shows them. */
+    public record DashboardResponse(
+            long todayTasks,
+            long overdueTasks,
+            long upcomingEvents,
+            long monthExpense,
+            long monthIncome,
+            List<BudgetAlertResponse> budgetAlerts) {
     }
 }
