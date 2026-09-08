@@ -67,6 +67,7 @@ LifeHub/
 **Phase 0 — Hạ tầng & khung sườn: xong.**
 **Phase 1 — Task & Project: xong.**
 **Phase 2 — Calendar & Reminder: xong.**
+**Phase 3 — Finance: xong.**
 
 Đang chạy được:
 
@@ -78,6 +79,12 @@ LifeHub/
   xóa một lần riêng lẻ trong chuỗi, cảnh báo trùng giờ, task đến hạn hiển thị ngay trên lịch.
 - **Nhắc hẹn** — thông báo hệ điều hành đẩy qua SSE, hoãn và tắt ngay trên thông báo, modal
   tổng hợp nhắc hẹn bị lỡ khi mở lại app, thu nhỏ xuống system tray thay vì thoát.
+- **Tài chính** — sổ thu chi với ví, danh mục 2 cấp tiếng Việt tạo sẵn, chuyển khoản giữa hai ví,
+  số dư ví tính động từ sổ nên không bao giờ lệch, ngân sách theo tuần/tháng/năm có cảnh báo ở
+  mốc 80% và 100%, biểu đồ tròn cơ cấu chi tiêu và biểu đồ đường xu hướng thu/chi, bộ lọc nâng
+  cao, giao dịch định kỳ tự sinh và bù các lần bị lỡ.
+- **Tổng quan** — dashboard gộp việc hôm nay, việc quá hạn, sự kiện sắp tới, thu chi tháng này
+  và các ngân sách sắp vượt.
 
 Xem `PROGRESS.md` để biết tiến độ đầy đủ và `docs/07-PHASE-PLAN.md` để biết phase kế tiếp.
 

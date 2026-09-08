@@ -5,10 +5,21 @@
 | 0 — Hạ tầng & khung sườn | ✅ Xong | 2026-09-08 | 46 backend test + 14 frontend test PASS |
 | 1 — Task & Project | ✅ Xong | 2026-09-08 | Đã merge vào `main`; bảng này lúc đó chưa được cập nhật |
 | 2 — Calendar & Reminder | ✅ Xong | 2026-09-08 | 240 backend test + 61 frontend test PASS |
-| 3 — Finance | ⏸ Chờ | | |
+| 3 — Finance | ✅ Xong | 2026-09-08 | 304 backend test + 85 frontend test PASS. Đã sửa lỗi ngân sách trên danh mục con (xem "Lỗi đã sửa sau bàn giao") |
 | 4 — AI Layer | ⏸ Chờ | | |
 | 5 — Insight, Report, Import | ⏸ Chờ | | |
 | 6 — Đóng gói & phát hành | ⏸ Chờ | | |
+
+---
+
+## Lỗi đã sửa sau bàn giao
+
+### Phase 3
+
+| Ngày | Triệu chứng | Nguyên nhân | Cách sửa |
+|---|---|---|---|
+| 2026-09-08 | Tạo ngân sách cho **danh mục con** trả 500 "Đã xảy ra lỗi không mong muốn"; thử lại lần hai thì báo CONFLICT "Danh mục này đã có ngân sách cùng chu kỳ" | `LazyInitializationException` khi map response: `FinanceMapper.toRef` đọc tên **danh mục cha** để dựng nhãn "Ăn uống › Cà phê", nhưng không có gì nạp `category.parent` trước khi transaction đóng (`open-in-view` tắt). Bản ghi **đã commit xong** rồi mapper mới nổ — nên ngân sách thực ra đã được tạo, và lần thử thứ hai đụng ràng buộc trùng. Mọi test Phase 3 đều đặt ngân sách trên danh mục **gốc** nên không lần nào đi vào nhánh này | `BudgetService.statusOf` nạp sẵn danh mục và danh mục cha khi session còn mở (giống `TransactionWriter.hydrate`); các truy vấn của `SpringDataBudgetRepository` thêm `LEFT JOIN FETCH c.parent` và `findById` dùng truy vấn có fetch. Thêm test hồi quy `FinanceApiIT.supportsABudgetOnASubCategory` — đã kiểm chứng test này **thất bại** đúng lỗi cũ khi gỡ bản vá |
+| 2026-09-08 | Khi lưu thất bại, console có unhandled promise rejection | Các dialog tài chính gọi `void submit()` / `handleSubmit(async …)` mà không bắt lỗi, trong khi `mutateAsync` reject khi request hỏng | Bọc `try/catch` ở cả 5 form tài chính: giữ dialog mở và nguyên dữ liệu đã nhập, thông báo lỗi vẫn do `onError` của mutation hiển thị. Thêm test `TransactionFormDialog` cho nhánh lưu thất bại |
 
 ---
 
@@ -36,6 +47,19 @@
   phạm vi ảnh hưởng rộng hơn trước.
 - [ ] **Thời gian khởi động backend ~5,0 giây khi chạy lạnh** (đo trên máy dev, JVM chưa warm).
   NFR-PERF-01 là ≤ 6 giây tổng. Còn biên nhưng hẹp — cần đo lại ở Phase 6 với JRE rút gọn.
+- [ ] **Bundle renderer đã vượt 500 kB** (967 kB, gzip 277 kB) sau khi thêm Recharts. Với app
+  desktop nạp từ `file://` thì không có chi phí mạng, nên chưa ảnh hưởng NFR-PERF-01, nhưng nên
+  tách chunk cho phần biểu đồ ở Phase 6.
+- [ ] **Backup trước migration chưa tự động** (AGENTS.md §3.3 mục 3). `BackupService` thuộc Phase 5
+  (PROGRESS mục B-2). Ở Phase 3 đã sao lưu thủ công `data/lifehub.db` sang `data/backups/` trước
+  khi chạy `V4`/`V5`, và UAT Phase 3 nhắc user làm việc tương tự.
+- [ ] **Ví chưa có thao tác sắp xếp lại trên giao diện.** Cột `sort_order` có trong schema và API
+  `PATCH /wallets/{id}` nhận được, nhưng màn hình Ví chưa có kéo thả — danh sách xếp theo
+  `sort_order` rồi `created_at`.
+- [ ] **`GET /transactions/summary` gom nhóm trong bộ nhớ.** Bắt buộc vì SQLite không có hàm ngày
+  giờ hiểu múi giờ (xem giả định A3-07). An toàn với cửa sổ thời gian mà giao diện đang dùng
+  (tối đa 1 năm), nhưng nếu Phase 5 cần báo cáo nhiều năm thì phải tính lại bằng SQL hoặc bảng
+  snapshot theo tháng như 03-DATA-MODEL.md §2.6 gợi ý.
 
 ---
 
@@ -77,6 +101,31 @@
 | A2-14 | Sự kiện `all_day` không tính vào phát hiện xung đột | Một ngày nghỉ lễ chồng lên mọi cuộc họp trong ngày là đúng về mặt thời gian nhưng vô nghĩa với user, và sẽ khiến cảnh báo xung đột kêu liên tục |
 | A2-15 | Hoàn thành task lặp sinh instance kế tiếp và **giảm `COUNT` đi một**; task đã xong giữ nguyên làm bản ghi của lần chạy đó | FR-TSK-13 không nói `COUNT` xử lý thế nào. Giữ nguyên `COUNT` sẽ biến "lặp 3 lần" thành chuỗi vô tận |
 
+### Phase 3
+
+| # | Giả định | Lý do |
+|---|---|---|
+| A3-01 | `Money` là value object ở **API của entity**, còn cột `amount` / `limit_amount` map thành `long` thuần, không dùng `AttributeConverter` | Cột phải là số nguyên trần để `SUM`, `CASE` và so sánh khoảng chạy thẳng trong SQL — đó chính là thứ giúp số dư tính động và NFR-PERF-03 khả thi. Value object vẫn là kiểu duy nhất mà service, command và test chạm tới, nên ràng buộc "không âm, không số thực" (T3-01, T3-02) không hề bị nới |
+| A3-02 | Chu kỳ ngân sách **bám lịch** (thứ 2 / ngày 1 / 1-1) chứ không bước từ `start_date` | `03-DATA-MODEL.md` §2.9 gọi `start_date` là "mốc bắt đầu chu kỳ đầu tiên" nhưng không nói chu kỳ sau tính thế nào. Nếu bước từ `start_date`, ngân sách tạo ngày 17 sẽ báo "chu kỳ này" cho khoảng kết thúc ngày 16 tháng sau — không khớp sao kê ngân hàng, không khớp bảng lương, cũng không khớp ô "chi tháng này" của dashboard. `start_date` giữ nguyên ý nghĩa "ngày hạn mức có hiệu lực". Mốc thứ 2 theo đúng mặc định `app.week_start` (T3-09) |
+| A3-03 | Chi ở **danh mục con** tính vào ngân sách của **danh mục cha** | FR-FIN-08 không nói. Nếu không cộng, người dùng nào chịu khó phân loại 2 cấp sẽ thấy mọi ngân sách cấp cha luôn bằng 0 — tức là tính năng phân cấp và tính năng ngân sách triệt tiêu lẫn nhau. Bộ lọc `categoryIds` cũng mở rộng theo cùng quy tắc |
+| A3-04 | Thêm nhóm endpoint `/recurring-rules` (GET, POST, PATCH, DELETE) và `POST /recurring-rules/run` | FR-FIN-13 thuộc phạm vi Phase 3 nhưng `06-API-SPEC.md` §7 dừng ở budget, không có endpoint nào cho giao dịch định kỳ. Đường dẫn theo đúng quy ước của các resource còn lại. `/run` để user ép chạy từ giao diện thay vì phải khởi động lại app |
+| A3-05 | Tách `TransactionWriter` (có `@Transactional`) khỏi `TransactionService` (không có) | SD-01 ghi rõ bước tính lại số dư và kiểm ngân sách nằm **ngoài** transaction ghi giao dịch. Nếu cả luồng dùng chung một phương thức `@Transactional`, một lỗi lúc dựng banner cảnh báo sẽ âm thầm rollback chính bản ghi user vừa nhập — đúng hậu quả mà sơ đồ cảnh báo |
+| A3-06 | Giao dịch `TRANSFER` **không tính** vào `totalIncome`, `totalExpense` và biểu đồ | Chuyển tiền giữa hai ví của chính mình không phải thu cũng không phải chi. Nếu tính, tổng hai chiều đều phồng lên và biểu đồ tròn sẽ lệch với danh sách giao dịch ngay bên cạnh — vi phạm tiêu chí chấp nhận của chính phase này |
+| A3-07 | `GET /transactions/summary` gom nhóm **trong bộ nhớ**, không gom bằng SQL | Gom theo tuần/tháng nghĩa là chia theo ngày **giờ địa phương**, mà SQLite lưu mốc thời gian dưới dạng epoch milli và không có hàm ngày giờ hiểu múi giờ. Làm trong SQL đồng nghĩa với việc viết lại lịch bằng phép toán chuỗi và sai ở đúng các mốc biên. Khoảng thời gian do người gọi giới hạn nên số dòng tỉ lệ với cửa sổ đang vẽ |
+| A3-08 | Response ghi giao dịch có thêm `toWalletBalance`; `GET /wallets` trả `{wallets, totalAssets}` thay vì mảng trần | `06-API-SPEC.md` §7 chỉ vẽ `walletBalance`, nhưng một giao dịch chuyển khoản đổi số dư của **hai** ví. `totalAssets` là con số màn hình Ví bắt buộc hiển thị (FR-FIN-01) và tính ở backend thì không thể lệch với danh sách. Cả hai đều là bổ sung thuần túy, không đổi trường nào đã đặc tả |
+| A3-09 | `PATCH`, `DELETE` và `POST /transactions/{id}/restore` trả **cùng hình dạng** với `POST /transactions` | Đặc tả chỉ vẽ response của `POST`. Sửa hay xóa cũng làm số dư đổi đúng như khi tạo, nên trả cùng khối dữ liệu giúp giao diện dùng chung một đường xử lý thay vì ba |
+| A3-10 | `wallet.initial_balance` cho phép **âm**, còn `Money` thì không | Thẻ tín dụng bắt đầu ở trạng thái đang nợ. Số dư là đại lượng có dấu; số tiền giao dịch là độ lớn, dấu nằm ở `type`. Vì vậy `initial_balance` và số dư tính ra là `long`, không bao giờ là `Money` |
+| A3-11 | Ví **đầu tiên** tự động thành ví mặc định | UC-06 bước 2 yêu cầu form điền sẵn ví. Nếu không ví nào là mặc định, người dùng mới phải chọn ví thủ công ở mọi giao dịch cho tới khi họ tự phát hiện ra ô "đặt làm mặc định" |
+| A3-12 | Không xóa được danh mục **đang có danh mục con** (ngoài hai lý do đã ghi ở `06-API-SPEC.md`) | Khóa ngoại là `ON DELETE RESTRICT`, nên nếu không chặn ở tầng nghiệp vụ thì user sẽ nhận lỗi ràng buộc thô thay vì một câu tiếng Việt nói rõ phải làm gì |
+| A3-13 | `V5` dùng id hằng số **hình dạng UUID v7** và ghi mốc thời gian bằng epoch milli | Seed không chạy qua `IdGenerator` được. Tiền tố thời gian cố định trong quá khứ giúp danh mục hệ thống luôn đứng trước danh mục user tự tạo khi sắp theo id. Epoch milli là đúng định dạng Hibernate ghi xuống SQLite (đã kiểm chứng trên chính `data/lifehub.db`) — dùng `CURRENT_TIMESTAMP` sẽ trộn hai định dạng trong một cột |
+| A3-14 | Chuỗi lặp của `recurring_rule` neo vào `template.occurredAt`, và `COUNT` dùng hết thì quy luật **tự tắt** | Bảng chỉ có sáu cột theo ERD (mục C-3), không có chỗ lưu mốc bắt đầu riêng. Neo lại vào ngày chạy gần nhất sẽ khởi động lại `COUNT` sau mỗi lần sinh và biến "lặp 6 lần" thành chuỗi vô tận. Tắt quy luật đã cạn giúp scheduler không phải xét lại một bản ghi không bao giờ chạy nữa |
+| A3-15 | Job sinh giao dịch định kỳ chạy **lúc khởi động** và mỗi giờ, có bù các lần đã lỡ | Đây là app desktop, phần lớn thời gian ở trạng thái đóng — thời điểm mở app mới là cơ hội thực tế để bù một kỳ tiền nhà đã tới hạn. Nhịp mỗi giờ chỉ để phủ trường hợp app mở qua nửa đêm |
+| A3-16 | `LocalDate` lưu dạng chuỗi ISO qua `LocalDateConverter` (`autoApply`) | Áp dụng mục M-21. Driver mặc định ghi giá trị thời gian thành epoch milli, vô nghĩa với một giá trị không có giờ và không có múi giờ. Chuỗi ISO sắp xếp đúng thứ tự nên truy vấn khoảng trên `next_run_date` vẫn chạy trong SQL |
+| A3-17 | Số liệu dashboard đi kèm `GET /bootstrap`, không có endpoint riêng | `06-API-SPEC.md` §2 vốn mô tả bootstrap là "trả settings, reminder bị lỡ, số liệu dashboard trong 1 lần gọi". Mọi thao tác tài chính invalidate luôn query này nên bảng số liệu không bị cũ |
+| A3-18 | Bootstrap **hạ cấp** thành `dashboard: null` khi tổng hợp số liệu lỗi | Đây là lời gọi mà cả ứng dụng chờ lúc khởi động. Không mở được app chỉ vì không cộng được vài con số tổng hợp là cái giá sai; giao diện đã có sẵn nhánh hiển thị khi thiếu dashboard |
+| A3-19 | Danh sách giao dịch tải thêm bằng **nút "Tải thêm"**, không tự nạp khi cuộn | Phase plan ghi "infinite scroll". Nút cho kết quả tương đương về số request nhưng dùng được bằng bàn phím, không nuốt mất thanh cuộn, và không nạp thêm ngoài ý muốn khi user chỉ đang lướt tìm một dòng |
+| A3-20 | Thêm `recharts` vào `package.json` | `04-ARCHITECTURE.md` §2 đã chốt Recharts là thư viện biểu đồ nhưng gói chưa từng được cài (Phase 0–2 không có biểu đồ nào) |
+
 ---
 
 ## Quyết định thay đổi so với tài liệu
@@ -96,6 +145,8 @@
 | 2026-09-08 | M-4 | Thêm `spring-boot-starter-actuator` vào tech stack | `/actuator/health` là tiêu chí chấp nhận của Phase 0 nhưng chưa có trong bảng stack | ✅ |
 | 2026-09-08 | D-1 | Thư viện RRULE chốt là `org.mnode.ical4j:ical4j` 4.0.8 | `04-ARCHITECTURE.md` §2 ghi groupId là `com.github.ical4j`, không tồn tại trên Maven Central. Đây là cùng một thư viện, chỉ đúng tọa độ. Bản 4.x dùng `java.time` nên không phải chuyển đổi qua lớp ngày giờ riêng của ical4j | ✅ |
 | 2026-09-08 | D-2 | `Patch<T>` chuyển từ `TaskCommands` sang `domain/common/Patch.java`; thêm `api/common/JsonPatchReader` | Module calendar cũng cần cả hai. Để nguyên chỗ cũ thì `application.calendar` phải phụ thuộc `application.task`, và ba controller sẽ mang ba bản sao của cùng một đoạn đọc JSON. `domain/common` đã có trong cấu trúc chốt nên không phát sinh thư mục mới | ✅ |
+| 2026-09-08 | B-1 (áp dụng) | `recurring_rule` đã được tạo trong `V4__finance_module.sql` ở Phase 3 đúng như quyết định trên | Thực thi quyết định đã duyệt | ✅ |
+| 2026-09-08 | C-3, C-4, C-5, C-6, M-15, M-21 (áp dụng) | `V4` tạo `transaction_tag` và `recurring_rule` theo định nghĩa chốt; unique index của `category` đặt trên `COALESCE(parent_id, '')`; `wallet`, `category`, `budget` đều có `updated_at`, `budget` có `deleted_at`; `idx_wallet_name` là partial index; `start_date` / `next_run_date` / `last_run_date` lưu `TEXT` ISO | Áp dụng phụ lục §6 của `03-DATA-MODEL.md` khi tới đúng phase | ✅ |
 
 > Các mục C-3 → C-15, C-17 và M-5 → M-22 đã được duyệt và ghi trong phụ lục §6 của
 > `03-DATA-MODEL.md` (sửa đổi schema) hoặc áp dụng trực tiếp ở phase tương ứng. Chúng sẽ được
