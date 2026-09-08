@@ -21,7 +21,7 @@ const NAV_ITEMS: {
   { route: 'tasks', label: 'Công việc', Icon: ListTodo, enabled: true, phase: null },
   { route: 'projects', label: 'Dự án & Nhãn', Icon: FolderKanban, enabled: true, phase: null },
   { route: 'calendar', label: 'Lịch', Icon: CalendarDays, enabled: true, phase: null },
-  { route: 'finance', label: 'Tài chính', Icon: Wallet, enabled: false, phase: 3 },
+  { route: 'finance', label: 'Tài chính', Icon: Wallet, enabled: true, phase: null },
   { route: 'settings', label: 'Cài đặt', Icon: Settings, enabled: false, phase: 4 },
 ]
 

@@ -7,6 +7,7 @@ import { MissedRemindersModal } from '@/features/calendar/components/MissedRemin
 import { useReminders } from '@/features/calendar/useReminders'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
 import { useBootstrap } from '@/features/dashboard/useBootstrap'
+import { FinancePage } from '@/features/finance/FinancePage'
 import { ProjectsPage } from '@/features/tasks/ProjectsPage'
 import { TasksPage } from '@/features/tasks/TasksPage'
 import { useTheme } from '@/shared/hooks/useTheme'
@@ -50,6 +51,7 @@ export default function App() {
         {route === 'tasks' && <TasksPage />}
         {route === 'projects' && <ProjectsPage />}
         {route === 'calendar' && <CalendarPage />}
+        {route === 'finance' && <FinancePage />}
       </AppLayout>
 
       <MissedRemindersModal
