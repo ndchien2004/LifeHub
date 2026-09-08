@@ -10,8 +10,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.lifehub.application.calendar.RecurrenceExpander;
 import com.lifehub.application.task.TaskCommands.CreateTask;
-import com.lifehub.application.task.TaskCommands.Patch;
+import com.lifehub.domain.common.Patch;
 import com.lifehub.application.task.TaskCommands.ReorderEntry;
 import com.lifehub.application.task.TaskCommands.UpdateTask;
 import com.lifehub.domain.common.NotFoundException;
@@ -53,7 +54,8 @@ class TaskServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new TaskService(taskRepository, projectRepository, tagRepository, clock);
+        service = new TaskService(
+                taskRepository, projectRepository, tagRepository, new RecurrenceExpander(), clock, ZoneOffset.UTC);
         when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(taskRepository.findSubtasks(anyString())).thenReturn(List.of());
         when(taskRepository.findSubtasksIncludingDeleted(anyString())).thenReturn(List.of());
@@ -75,7 +77,8 @@ class TaskServiceTest {
                 "p1",
                 null,
                 List.of("t1"),
-                180));
+                180,
+                null));
 
         assertThat(task.getTitle()).isEqualTo("Viết SRS");
         assertThat(task.getPriority()).isEqualTo(Priority.HIGH);
@@ -89,7 +92,7 @@ class TaskServiceTest {
     @DisplayName("T1-01 — tạo task tiêu đề rỗng thì không có gì được lưu")
     void doesNotSaveWhenTheTitleIsEmpty() {
         assertThatThrownBy(() -> service.create(
-                        new CreateTask("", null, null, null, null, null, null, null)))
+                        new CreateTask("", null, null, null, null, null, null, null, null)))
                 .isInstanceOf(ValidationException.class);
 
         verify(taskRepository, never()).save(any());
@@ -104,7 +107,7 @@ class TaskServiceTest {
         when(taskRepository.findById("child")).thenReturn(Optional.of(child));
 
         assertThatThrownBy(() -> service.create(
-                        new CreateTask("Rà soát", null, null, null, null, "child", null, null)))
+                        new CreateTask("Rà soát", null, null, null, null, "child", null, null, null)))
                 .isInstanceOf(Task.SubtaskDepthException.class);
 
         verify(taskRepository, never()).save(any());
@@ -146,6 +149,7 @@ class TaskServiceTest {
                 Patch.absent(),
                 Patch.absent(),
                 Patch.absent(),
+                Patch.absent(),
                 Patch.absent()));
 
         assertThat(task.getTitle()).isEqualTo("Viết SRS v2");
@@ -168,6 +172,7 @@ class TaskServiceTest {
                 Patch.of(null),
                 Patch.absent(),
                 Patch.absent(),
+                Patch.absent(),
                 Patch.absent()));
 
         assertThat(task.getDueAt()).as("gửi dueAt: null nghĩa là bỏ hạn chót").isNull();
@@ -179,7 +184,7 @@ class TaskServiceTest {
         when(tagRepository.findAllById(Set.of("ghost"))).thenReturn(Set.of());
 
         assertThatThrownBy(() -> service.create(
-                        new CreateTask("Viết SRS", null, null, null, null, null, List.of("ghost"), null)))
+                        new CreateTask("Viết SRS", null, null, null, null, null, List.of("ghost"), null, null)))
                 .isInstanceOf(ValidationException.class)
                 .satisfies(e -> assertThat(((ValidationException) e).getField()).isEqualTo("tagIds"));
     }

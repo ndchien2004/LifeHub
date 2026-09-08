@@ -39,6 +39,7 @@ public final class TaskDtos {
             int completedSubtaskCount,
             List<TaskResponse> subtasks,
             Integer estimateMinutes,
+            String rrule,
             int sortOrder,
             OffsetDateTime completedAt,
             OffsetDateTime deletedAt,
@@ -77,7 +78,8 @@ public final class TaskDtos {
             String parentId,
             List<String> tagIds,
             @Positive(message = "Ước lượng thời gian phải lớn hơn 0")
-            Integer estimateMinutes) {
+            Integer estimateMinutes,
+            String rrule) {
     }
 
     /**
@@ -92,7 +94,8 @@ public final class TaskDtos {
             OffsetDateTime dueAt,
             String projectId,
             List<String> tagIds,
-            @Positive(message = "Ước lượng thời gian phải lớn hơn 0") Integer estimateMinutes) {
+            @Positive(message = "Ước lượng thời gian phải lớn hơn 0") Integer estimateMinutes,
+            String rrule) {
     }
 
     public record ChangeStatusRequest(TaskStatus status) {

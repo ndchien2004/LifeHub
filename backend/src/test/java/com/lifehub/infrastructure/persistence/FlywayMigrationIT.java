@@ -43,12 +43,12 @@ class FlywayMigrationIT {
             assertThat(tableExists(connection, "flyway_schema_history")).isTrue();
 
             assertThat(scalar(connection, "SELECT COUNT(*) FROM flyway_schema_history"))
-                    .as("Phase 0 có V1, Phase 1 thêm V2")
-                    .isEqualTo("2");
+                    .as("Phase 0 có V1, Phase 1 thêm V2, Phase 2 thêm V3")
+                    .isEqualTo("3");
             assertThat(scalar(connection,
                             "SELECT GROUP_CONCAT(version) FROM "
                                     + "(SELECT version FROM flyway_schema_history ORDER BY installed_rank)"))
-                    .isEqualTo("1,2");
+                    .isEqualTo("1,2,3");
             assertThat(scalar(connection, "SELECT COUNT(*) FROM flyway_schema_history WHERE success = 0"))
                     .as("không migration nào được phép thất bại")
                     .isEqualTo("0");
@@ -68,6 +68,22 @@ class FlywayMigrationIT {
                             "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name IN "
                                     + "('idx_task_due','idx_task_status','idx_task_project','idx_tag_name')"))
                     .isEqualTo("4");
+        }
+    }
+
+    @Test
+    @DisplayName("V3 tạo đủ bảng module Calendar kèm index bắt buộc")
+    void migrationCreatedTheCalendarModule() throws Exception {
+        try (Connection connection = dataSource.getConnection()) {
+            assertThat(tableExists(connection, "event")).isTrue();
+            assertThat(tableExists(connection, "event_exception")).isTrue();
+            assertThat(tableExists(connection, "reminder")).isTrue();
+
+            assertThat(scalar(connection,
+                            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name IN "
+                                    + "('idx_event_range','idx_reminder_pending','idx_event_exception_occurrence')"))
+                    .as("idx_reminder_pending là index scheduler phụ thuộc hoàn toàn (SD-03)")
+                    .isEqualTo("3");
         }
     }
 

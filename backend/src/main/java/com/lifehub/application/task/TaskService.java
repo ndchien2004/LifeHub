@@ -1,5 +1,6 @@
 package com.lifehub.application.task;
 
+import com.lifehub.application.calendar.RecurrenceExpander;
 import com.lifehub.application.task.TaskCommands.CreateTask;
 import com.lifehub.application.task.TaskCommands.ReorderEntry;
 import com.lifehub.application.task.TaskCommands.UpdateTask;
@@ -14,8 +15,10 @@ import com.lifehub.domain.task.TaskRepository;
 import com.lifehub.domain.task.TaskStatus;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,17 +40,23 @@ public class TaskService {
     private final TaskRepository taskRepository;
     private final ProjectRepository projectRepository;
     private final TagRepository tagRepository;
+    private final RecurrenceExpander expander;
     private final Clock clock;
+    private final ZoneId displayZone;
 
     public TaskService(
             TaskRepository taskRepository,
             ProjectRepository projectRepository,
             TagRepository tagRepository,
-            Clock clock) {
+            RecurrenceExpander expander,
+            Clock clock,
+            ZoneId displayZone) {
         this.taskRepository = taskRepository;
         this.projectRepository = projectRepository;
         this.tagRepository = tagRepository;
+        this.expander = expander;
         this.clock = clock;
+        this.displayZone = displayZone;
     }
 
     public Task create(CreateTask command) {
@@ -59,6 +68,8 @@ public class TaskService {
         task.moveTo(resolveProject(command.projectId()));
         task.attachTo(resolveParent(command.parentId()));
         task.replaceTags(resolveTags(command.tagIds()));
+        expander.validate(command.rrule());
+        task.repeat(command.rrule());
         return taskRepository.save(task);
     }
 
@@ -72,16 +83,46 @@ public class TaskService {
         command.estimateMinutes().ifPresent(task::estimate);
         command.projectId().ifPresent(projectId -> task.moveTo(resolveProject(projectId)));
         command.tagIds().ifPresent(tagIds -> task.replaceTags(resolveTags(tagIds)));
+        command.rrule().ifPresent(rrule -> {
+            expander.validate(rrule);
+            task.repeat(rrule);
+        });
         command.status().ifPresent(status -> task.changeStatus(status, now()));
 
-        return taskRepository.save(task);
+        Task saved = taskRepository.save(task);
+        command.status().ifPresent(status -> spawnNextInstance(saved, status));
+        return saved;
     }
 
     /** Dedicated status change, kept cheap because Kanban drag and drop calls it constantly. */
     public Task changeStatus(String id, TaskStatus status) {
         Task task = require(id);
         task.changeStatus(status, now());
-        return taskRepository.save(task);
+        Task saved = taskRepository.save(task);
+        spawnNextInstance(saved, status);
+        return saved;
+    }
+
+    /**
+     * Rolls a repeating task forward on completion (FR-TSK-13).
+     *
+     * <p>The completed task is left exactly as it is - it becomes the record of that run - and a
+     * fresh TODO copy is created for the next deadline. Generating on completion rather than
+     * ahead of time means the list never fills with future instances the user has not reached.
+     *
+     * @return the successor, or empty when the task does not repeat or its rule is spent
+     */
+    public Optional<Task> spawnNextInstance(Task task, TaskStatus newStatus) {
+        if (newStatus == null || !newStatus.isDone() || !task.isRepeating()) {
+            return Optional.empty();
+        }
+        Optional<String> nextRule = expander.consumeOne(task.getRrule());
+        if (nextRule.isEmpty()) {
+            return Optional.empty();
+        }
+        return expander
+                .nextAfter(task.getRrule(), task.getDueAt(), displayZone, task.getDueAt())
+                .map(nextDueAt -> taskRepository.save(task.nextInstance(nextDueAt, nextRule.get())));
     }
 
     /** Soft delete (FR-TSK-03). The row survives so the undo toast can restore it. */

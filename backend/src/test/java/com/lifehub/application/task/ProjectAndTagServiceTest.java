@@ -9,7 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.lifehub.application.task.TaskCommands.CreateProject;
-import com.lifehub.application.task.TaskCommands.Patch;
+import com.lifehub.domain.common.Patch;
 import com.lifehub.application.task.TaskCommands.UpdateProject;
 import com.lifehub.domain.common.ConflictException;
 import com.lifehub.domain.common.NotFoundException;
