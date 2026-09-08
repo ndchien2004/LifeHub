@@ -1,0 +1,58 @@
+# LifeHub backend — cau hinh mac dinh.
+# Electron ghi de server.port, app.token, app.data-dir, app.log-dir luc spawn.
+spring:
+  application:
+    name: lifehub-backend
+
+  datasource:
+    # Cac pragma bat buoc (03-DATA-MODEL.md §5) dat tren URL de ap dung cho MOI ket noi,
+    # ke ca ket noi Flyway mo truoc khi Spring context san sang.
+    url: jdbc:sqlite:${app.data-dir:data}/lifehub.db?journal_mode=WAL&foreign_keys=true&busy_timeout=5000&synchronous=NORMAL
+    driver-class-name: org.sqlite.JDBC
+    hikari:
+      pool-name: lifehub-sqlite
+      maximum-pool-size: 4
+      auto-commit: false
+
+  jpa:
+    database-platform: org.hibernate.community.dialect.SQLiteDialect
+    hibernate:
+      # Schema CHI duoc thay doi qua Flyway migration (AGENTS.md §3.3, NFR-MNT-03).
+      ddl-auto: none
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+
+server:
+  # NFR-SEC-02: chi lang nghe tren loopback, khong mo ra mang ngoai.
+  address: 127.0.0.1
+  port: ${SERVER_PORT:8080}
+  error:
+    include-stacktrace: never
+    include-message: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+app:
+  token: ${APP_TOKEN:}
+  data-dir: ${LIFEHUB_DATA_DIR:data}
+  log-dir: ${LIFEHUB_LOG_DIR:logs}
+
+logging:
+  level:
+    com.lifehub: INFO

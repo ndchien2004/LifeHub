@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Build output
+*.tsbuildinfo
+backend/target/
+frontend/dist/
+electron/dist/
+release/
+
+# Du lieu nguoi dung — KHONG BAO GIO commit
+data/
+logs/
+
+# Maven
+.mvn/wrapper/maven-wrapper.jar
+
+# IDE
+.idea/
+.vscode/
+*.iml
+.DS_Store
+
+# Bien moi truong cuc bo (co the chua API key)
+.env
+.env.local

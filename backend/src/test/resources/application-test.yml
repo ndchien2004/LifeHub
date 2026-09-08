@@ -1,0 +1,23 @@
+# Cau hinh test.
+# spring.datasource.url KHONG dat o day: moi test class tu sinh mot file DB rieng qua
+# TestDatabase.freshUrl() + @DynamicPropertySource, de dam bao khong chia se trang thai
+# (08-TEST-PLAN.md §2).
+spring:
+  jpa:
+    database-platform: org.hibernate.community.dialect.SQLiteDialect
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+app:
+  token: test-token
+  data-dir: target/test-data
+  log-dir: target/test-logs
+
+logging:
+  level:
+    com.lifehub: INFO
+    org.hibernate.SQL: WARN
