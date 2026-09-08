@@ -149,17 +149,22 @@ public class Reminder {
     /**
      * Creates the replacement reminder a snooze produces (UC-04 flow 5a).
      *
-     * <p>The offset is recomputed so {@link #occurrenceStart()} still resolves to the same moment;
-     * copying the original offset would make the notification quote a time that drifts by exactly
-     * the snooze duration every time.
+     * <p>The offset is recomputed against the new trigger so {@link #occurrenceStart()} still
+     * resolves to the same moment; copying the original offset would make the notification quote a
+     * time that drifts by exactly the snooze duration every time.
+     *
+     * <p>{@code offset_minutes} is a whole number of minutes, so the requested trigger is snapped
+     * to the nearest minute that keeps the derivation exact. The alternative - storing the trigger
+     * verbatim and letting the derived occurrence absorb the remainder - moves the event time the
+     * notification announces by up to a minute, which the user would see. Firing up to thirty
+     * seconds off a snooze they asked for in whole minutes, they would not, and it is inside the
+     * scheduler's own 30 second tick either way (NFR-PERF-06).
      */
     public Reminder snoozeUntil(Instant newTriggerAt) {
         Instant occurrence = occurrenceStart();
-        int newOffset = (int) Duration.between(newTriggerAt, occurrence).toMinutes();
-        Reminder replacement = new Reminder(event, task, occurrence, newOffset);
-        replacement.triggerAt = newTriggerAt;
+        long minutesBefore = Math.round(Duration.between(newTriggerAt, occurrence).toSeconds() / 60.0);
         markSnoozed();
-        return replacement;
+        return new Reminder(event, task, occurrence, (int) minutesBefore);
     }
 
     /** Whether the trigger time has passed but is still inside the 24 hour actionable window. */

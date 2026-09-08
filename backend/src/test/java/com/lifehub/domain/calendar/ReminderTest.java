@@ -96,6 +96,23 @@ class ReminderTest {
         }
 
         @Test
+        @DisplayName("Hoãn lệch giây vẫn giữ mốc sự kiện chính xác, không làm sai giờ trên thông báo")
+        void aSubMinuteSnoozeStillPointsAtTheExactOccurrence() {
+            Instant occurrence = OCCURRENCE.plusSeconds(54);
+            Reminder original = Reminder.forEvent(anEvent(), occurrence, 15);
+
+            // "Hoãn 10 phút" bấm lúc 22 giây lẻ: offset là số phút nguyên nên phải làm tròn.
+            Reminder replacement = original.snoozeUntil(occurrence.plusSeconds(22));
+
+            assertThat(replacement.occurrenceStart())
+                    .as("suy ngược ra mốc gốc phải khớp tuyệt đối, nếu không thông báo sẽ nêu sai phút")
+                    .isEqualTo(occurrence);
+            assertThat(Duration.between(replacement.getTriggerAt(), occurrence.plusSeconds(22)).abs())
+                    .as("thời điểm bắn lệch dưới nửa phút so với yêu cầu")
+                    .isLessThanOrEqualTo(Duration.ofSeconds(30));
+        }
+
+        @Test
         @DisplayName("Bản hoãn mang offset lẻ nên không bị coi là cấu hình của event")
         void theReplacementIsNotMistakenForConfiguration() {
             Reminder replacement = Reminder.forEvent(anEvent(), OCCURRENCE, 15)

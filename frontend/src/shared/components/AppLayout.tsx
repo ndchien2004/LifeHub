@@ -20,7 +20,7 @@ const NAV_ITEMS: {
   { route: 'dashboard', label: 'Tổng quan', Icon: LayoutDashboard, enabled: true, phase: null },
   { route: 'tasks', label: 'Công việc', Icon: ListTodo, enabled: true, phase: null },
   { route: 'projects', label: 'Dự án & Nhãn', Icon: FolderKanban, enabled: true, phase: null },
-  { route: 'calendar', label: 'Lịch', Icon: CalendarDays, enabled: false, phase: 2 },
+  { route: 'calendar', label: 'Lịch', Icon: CalendarDays, enabled: true, phase: null },
   { route: 'finance', label: 'Tài chính', Icon: Wallet, enabled: false, phase: 3 },
   { route: 'settings', label: 'Cài đặt', Icon: Settings, enabled: false, phase: 4 },
 ]

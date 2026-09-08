@@ -1,13 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiRequestError, apiFetch, resetBackendInfo } from './apiClient'
+import { stubLifeHubBridge } from '@/test/lifehubBridge'
 
 describe('apiClient', () => {
   beforeEach(() => {
     resetBackendInfo()
-    window.lifehub = {
-      getBackendInfo: vi.fn().mockResolvedValue({ port: 51234, token: 'secret-token' }),
-      onBackendRestarted: vi.fn().mockReturnValue(() => {}),
-    }
+    stubLifeHubBridge()
   })
 
   afterEach(() => {

@@ -3,8 +3,8 @@
 | Phase | Trạng thái | Ngày xong | Ghi chú |
 |---|---|---|---|
 | 0 — Hạ tầng & khung sườn | ✅ Xong | 2026-09-08 | 46 backend test + 14 frontend test PASS |
-| 1 — Task & Project | ⏸ Chờ | | |
-| 2 — Calendar & Reminder | ⏸ Chờ | | |
+| 1 — Task & Project | ✅ Xong | 2026-09-08 | Đã merge vào `main`; bảng này lúc đó chưa được cập nhật |
+| 2 — Calendar & Reminder | ✅ Xong | 2026-09-08 | 240 backend test + 61 frontend test PASS |
 | 3 — Finance | ⏸ Chờ | | |
 | 4 — AI Layer | ⏸ Chờ | | |
 | 5 — Insight, Report, Import | ⏸ Chờ | | |
@@ -14,6 +14,14 @@
 
 ## Nợ kỹ thuật
 
+- [ ] **Task lặp lại chưa có giao diện** (FR-TSK-13, ưu tiên C). Backend đầy đủ: cột `task.rrule`,
+  validate quy luật, hoàn thành task lặp sinh instance kế tiếp và tiêu thụ dần `COUNT`. Form task
+  chưa có ô chọn quy luật lặp — bộ dựng RRULE đã có sẵn ở `features/calendar/components/RecurrenceBuilder.tsx`,
+  chỉ cần gắn vào `TaskFormDialog`. UAT Phase 2 kiểm mục này qua API (UAT-2-14).
+- [ ] **Xóa chuỗi lặp với scope THIS_AND_FOLLOWING** hiện xóa cả chuỗi. `06-API-SPEC.md` §5 chỉ
+  định nghĩa `DELETE /events/{id}` (cả chuỗi) và `DELETE /events/{id}/occurrences/{...}` (một lần),
+  không có endpoint cắt-rồi-xóa. Hộp thoại phạm vi nói rõ từng lựa chọn làm gì nên user không bị
+  bất ngờ, nhưng đây là khoảng trống thật so với FR-CAL-04.
 - [ ] **`task.actual_minutes` không có chủ** (M-14) — cột nằm trong schema chốt nhưng chưa có
   FR hay use case nào dùng (ghi chú gốc: "pomodoro, phase sau"). Sẽ tạo ở `V2` đúng schema,
   không expose ra API cho tới khi có yêu cầu thật.
@@ -22,6 +30,10 @@
 - [ ] **Cảnh báo `npm audit` ở devDependencies**: `extract-zip` (qua `electron`) và `esbuild`
   (qua `vite@5`). Dependency chạy thật: 0 lỗ hổng. Không sửa vì `npm audit fix --force` sẽ nâng
   Vite/Electron vượt phiên bản đã chốt trong `04-ARCHITECTURE.md` §2.
+- [ ] **`displayZone` được phân giải một lần lúc khởi động** (`TimeConfig`). Đổi `app.timezone`
+  trong Settings ở Phase 4 sẽ phải làm mới bean này hoặc khởi động lại backend. Phase 2 dùng nó ở
+  thêm hai chỗ (`ReminderService` dựng nội dung thông báo, `TaskService` tính mốc lặp kế tiếp) nên
+  phạm vi ảnh hưởng rộng hơn trước.
 - [ ] **Thời gian khởi động backend ~5,0 giây khi chạy lạnh** (đo trên máy dev, JVM chưa warm).
   NFR-PERF-01 là ≤ 6 giây tổng. Còn biên nhưng hẹp — cần đo lại ở Phase 6 với JRE rút gọn.
 
@@ -45,6 +57,26 @@
 | A0-10 | Mỗi lần backend restart sinh **port và token mới**, đẩy xuống renderer qua `app:backend-restarted` | Port cũ có thể còn ở TIME_WAIT; token gắn với vòng đời tiến trình nó xác thực nên không có lý do sống lâu hơn tiến trình đó |
 | A0-11 | Vite dev server ghim vào `127.0.0.1` | Mặc định trên Windows Vite chỉ bind `[::1]` (IPv6), khiến `wait-on`, Electron loader và `connect-src` trong CSP — đều dùng 127.0.0.1 — không kết nối được |
 
+### Phase 2
+
+| # | Giả định | Lý do |
+|---|---|---|
+| A2-01 | Reminder **không lưu** instance nào nó thuộc về; giá trị đó suy ra bằng `trigger_at + offset_minutes` | `03-DATA-MODEL.md` §2.5 không có cột cho việc này, nhưng một event lặp cần một reminder cho mỗi lần lặp, và thông báo phải nêu đúng giờ của lần đó. Phép suy là chính xác tuyệt đối vì `trigger_at` vốn được tính từ đúng hai đại lượng ấy. Nhờ vậy schema đã chốt không phải thêm cột |
+| A2-02 | Khi hoãn, reminder mới **tính lại** `offset_minutes` theo mốc sự kiện gốc, và thời điểm bắn được làm tròn về phút gần nhất | Giữ nguyên offset cũ sẽ khiến thông báo nêu giờ họp trôi thêm đúng bằng thời gian hoãn sau mỗi lần. `offset_minutes` là số nguyên phút nên phải làm tròn — lệch dưới 30 giây so với yêu cầu, vẫn nằm trong chính chu kỳ quét 30 giây của scheduler (NFR-PERF-06). Offset âm là hợp lệ khi sự kiện đã bắt đầu |
+| A2-03 | Danh sách "khoảng nhắc đã cấu hình" của một event = các `offset_minutes` **thuộc sáu giá trị FR-CAL-06 cho phép** | Bản ghi sinh ra do hoãn mang offset lẻ (ví dụ 1437 phút) nên tự động bị loại; nếu không, form sửa event sẽ hiện thêm một mục nhắc mà user chưa từng chọn |
+| A2-04 | `GET /events` trả **một danh sách phẳng** gồm cả event và hạn chót task, phân biệt bằng trường `kind` | `06-API-SPEC.md` §5 mô tả endpoint là "danh sách instance" và có tham số `includeTasks`, nhưng mẫu response chỉ vẽ hình dạng của event. Thêm `kind` là bổ sung thuần túy, giữ nguyên mọi trường đã đặc tả, và chính nó là tín hiệu để lịch vẽ task khác kiểu theo FR-CAL-10 |
+| A2-05 | Thêm hai trường bổ sung vào item của `GET /events`: `hasConflict` (FR-CAL-11) và `description` | Cảnh báo xung đột là yêu cầu bắt buộc nhưng đặc tả response không có chỗ mang thông tin đó; tính lại ở frontend sẽ sai vì frontend chỉ thấy đúng cửa sổ đang mở |
+| A2-06 | `GET /events?from=..&to=..` giới hạn cửa sổ tối đa **400 ngày** | Không có giới hạn thì một request duy nhất có thể bung hàng chục nghìn instance. 400 ngày đủ rộng cho mọi chế độ xem của FR-CAL-02 |
+| A2-07 | Reminder được sinh sẵn cho các instance trong **90 ngày tới** và làm mới mỗi giờ (kèm một lần lúc khởi động) | Phase plan chốt chân trời 90 ngày nhưng không nói ai đẩy nó đi tiếp. Không có job này, một chuỗi hàng tuần sẽ lặng lẽ ngừng nhắc sau ba tháng vì bản ghi đơn giản là không tồn tại |
+| A2-08 | `@EnableScheduling` bị tắt ở profile `test`; các scheduler vẫn là bean và test gọi thẳng với `Clock` cố định | Nếu để bật, một nhịp quét 30 giây có thể chen vào giữa một assertion và đổi dữ liệu bên dưới nó |
+| A2-09 | Electron main giữ kết nối SSE và bắn native notification; renderer chỉ nhận bản sao qua IPC | Cửa sổ có thể đang thu nhỏ dưới tray đúng lúc reminder tới — chính là tình huống FR-CAL-07 nhắm tới — nên renderer không thể là nơi chịu trách nhiệm hiển thị |
+| A2-10 | Nút "Hoãn"/"Đã xong" trên notification gọi thẳng REST từ main process, không đi qua renderer | Cùng lý do A2-09: renderer có thể không tồn tại tại thời điểm user bấm |
+| A2-11 | Kênh `notification:permission` trả `granted`/`denied` dựa trên `Notification.isSupported()` | Electron không expose trạng thái quyền thật của hệ điều hành. Điều renderer cần quyết định là "có nên hiện toast thay thế không", và tín hiệu này đủ để trả lời |
+| A2-12 | Đóng cửa sổ **ẩn** xuống tray; chỉ menu tray → Thoát hoặc lệnh thoát của hệ điều hành mới kết thúc tiến trình | FR-SYS-07. `before-quit` cũng đặt cờ thoát để Cmd+Q và lệnh tắt máy không bị kẹt vô hạn |
+| A2-13 | Lịch coi tuần bắt đầu từ **thứ 2** | Đúng mặc định `app.week_start = MONDAY` ở `03-DATA-MODEL.md` §2.11. Phase 4 sẽ đọc từ setting |
+| A2-14 | Sự kiện `all_day` không tính vào phát hiện xung đột | Một ngày nghỉ lễ chồng lên mọi cuộc họp trong ngày là đúng về mặt thời gian nhưng vô nghĩa với user, và sẽ khiến cảnh báo xung đột kêu liên tục |
+| A2-15 | Hoàn thành task lặp sinh instance kế tiếp và **giảm `COUNT` đi một**; task đã xong giữ nguyên làm bản ghi của lần chạy đó | FR-TSK-13 không nói `COUNT` xử lý thế nào. Giữ nguyên `COUNT` sẽ biến "lặp 3 lần" thành chuỗi vô tận |
+
 ---
 
 ## Quyết định thay đổi so với tài liệu
@@ -62,6 +94,8 @@
 | 2026-09-08 | M-1 | `AGENTS.md` chuyển từ `docs/` ra thư mục gốc | Đúng như `README.md` và `04-ARCHITECTURE.md` §4 mô tả, và là nơi agent tự động đọc | ✅ |
 | 2026-09-08 | M-3 | Thêm `com.fasterxml.uuid:java-uuid-generator` 5.1.0 vào tech stack | JDK không có bộ sinh UUID v7; T0-07 yêu cầu id có thứ tự theo thời gian | ✅ |
 | 2026-09-08 | M-4 | Thêm `spring-boot-starter-actuator` vào tech stack | `/actuator/health` là tiêu chí chấp nhận của Phase 0 nhưng chưa có trong bảng stack | ✅ |
+| 2026-09-08 | D-1 | Thư viện RRULE chốt là `org.mnode.ical4j:ical4j` 4.0.8 | `04-ARCHITECTURE.md` §2 ghi groupId là `com.github.ical4j`, không tồn tại trên Maven Central. Đây là cùng một thư viện, chỉ đúng tọa độ. Bản 4.x dùng `java.time` nên không phải chuyển đổi qua lớp ngày giờ riêng của ical4j | ✅ |
+| 2026-09-08 | D-2 | `Patch<T>` chuyển từ `TaskCommands` sang `domain/common/Patch.java`; thêm `api/common/JsonPatchReader` | Module calendar cũng cần cả hai. Để nguyên chỗ cũ thì `application.calendar` phải phụ thuộc `application.task`, và ba controller sẽ mang ba bản sao của cùng một đoạn đọc JSON. `domain/common` đã có trong cấu trúc chốt nên không phát sinh thư mục mới | ✅ |
 
 > Các mục C-3 → C-15, C-17 và M-5 → M-22 đã được duyệt và ghi trong phụ lục §6 của
 > `03-DATA-MODEL.md` (sửa đổi schema) hoặc áp dụng trực tiếp ở phase tương ứng. Chúng sẽ được
