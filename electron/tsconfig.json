@@ -14,5 +14,8 @@
     "outDir": "./dist",
     "rootDir": "."
   },
-  "include": ["*.ts"]
+  "include": ["*.ts"],
+  // Test files are transpiled by Vitest, not by this build: emitting them into dist/ would ship
+  // test code inside the app and would need vitest types on the production compile.
+  "exclude": ["dist", "*.test.ts", "vitest.config.ts"]
 }

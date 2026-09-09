@@ -16,6 +16,8 @@ import com.lifehub.domain.ai.TransactionDraft;
 import com.lifehub.domain.finance.CategoryType;
 import com.lifehub.domain.finance.TransactionType;
 import com.lifehub.domain.task.Priority;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -232,15 +234,22 @@ public class ParseResponseReader implements AiResponseReader {
      * <p>A model answering {@code 45000.0} is answering correctly in a language with one number
      * type, so a fractional value is rounded rather than rejected. Sub-đồng precision does not exist
      * in this currency and never mattered.
+     *
+     * <p>The rounding runs through {@link BigDecimal}, never {@code double}: this value goes on to
+     * become a {@code Money}, and the whole point of that type is that no binary floating point
+     * ever touches a stored amount (FR-FIN-06). {@code VietnameseAmountParser} takes the same route
+     * for the same reason.
      */
     private Long amountOf(JsonNode node) {
         if (node.isNumber()) {
-            return Math.round(node.asDouble());
+            return node.decimalValue().setScale(0, RoundingMode.HALF_UP).longValueExact();
         }
         if (node.isTextual()) {
             try {
-                return Math.round(Double.parseDouble(node.asText().trim()));
-            } catch (NumberFormatException e) {
+                return new BigDecimal(node.asText().trim())
+                        .setScale(0, RoundingMode.HALF_UP)
+                        .longValueExact();
+            } catch (NumberFormatException | ArithmeticException e) {
                 return null;
             }
         }

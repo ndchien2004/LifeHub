@@ -13,10 +13,11 @@
     "backend:test": "node scripts/mvnw.mjs -B test",
     "backend:run": "node scripts/mvnw.mjs -B spring-boot:run",
     "electron:build": "tsc -p electron/tsconfig.json",
+    "electron:test": "vitest run --config electron/vitest.config.ts",
     "frontend:build": "npm --prefix frontend run build",
     "frontend:test": "npm --prefix frontend run test",
     "build": "npm run backend:build && npm run frontend:build && npm run electron:build",
-    "test": "npm run backend:test && npm run frontend:test",
+    "test": "npm run backend:test && npm run frontend:test && npm run electron:test",
     "typecheck": "npm --prefix frontend run typecheck && tsc -p electron/tsconfig.json --noEmit",
     "postinstall": "npm --prefix frontend install"
   },
@@ -26,6 +27,7 @@
     "cross-env": "^7.0.3",
     "electron": "^32.3.3",
     "typescript": "^5.6.2",
+    "vitest": "^2.1.2",
     "wait-on": "^8.0.1"
   }
 }

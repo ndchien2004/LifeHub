@@ -44,6 +44,9 @@ const HEALTH_POLL_INTERVAL_MS = 300
 const HEALTH_TIMEOUT_MS = 30_000
 const MAX_RESTART_ATTEMPTS = 3
 
+/** How long a deliberate restart waits for the old process to die before giving up on it. */
+const EXIT_TIMEOUT_MS = 5_000
+
 export class BackendManager {
   private child: ChildProcess | null = null
   private info: BackendInfo | null = null
@@ -80,11 +83,15 @@ export class BackendManager {
    *
    * The Settings screen needs this: the API key and the display timezone are both read once at
    * startup, so changing either only takes effect on the next process.
+   *
+   * The old process is awaited, not merely signalled. `kill()` returns as soon as the signal is
+   * delivered and the `exit` event arrives a tick later — so lowering `shuttingDown` in the same
+   * tick would let `handleExit` see a non-zero exit code with the flag already down and treat the
+   * deliberate kill as a crash. It would then spawn a *second* backend under the restart policy,
+   * leaving two JVMs writing the same SQLite file.
    */
   async restartNow(): Promise<BackendInfo> {
-    this.shuttingDown = true
-    this.child?.kill()
-    this.child = null
+    await this.stopAndWait()
     this.shuttingDown = false
     this.restartAttempts = 0
 
@@ -98,6 +105,48 @@ export class BackendManager {
     this.shuttingDown = true
     this.child?.kill()
     this.child = null
+  }
+
+  /**
+   * Kills the running backend and resolves once the OS confirms it is gone.
+   *
+   * `shuttingDown` stays up for the whole wait, which is what keeps `handleExit` out of the restart
+   * policy. If the process ignores the signal, the wait is abandoned after
+   * {@link EXIT_TIMEOUT_MS} rather than leaving the Settings screen spinning forever: a stuck
+   * backend is bad, and a user who can never save an API key again is worse.
+   */
+  private stopAndWait(): Promise<void> {
+    const child = this.child
+    this.shuttingDown = true
+    this.child = null
+
+    // Already gone, or never started: no exit event is coming.
+    if (child === null || child.exitCode !== null || child.signalCode !== null) {
+      return Promise.resolve()
+    }
+
+    return new Promise<void>((resolve) => {
+      let timer: NodeJS.Timeout | undefined
+
+      const finish = () => {
+        if (timer !== undefined) {
+          clearTimeout(timer)
+        }
+        child.off('exit', finish)
+        resolve()
+      }
+
+      timer = setTimeout(() => {
+        console.warn(
+          `[backend] không thoát sau ${EXIT_TIMEOUT_MS} ms, buộc dừng rồi khởi động lại`,
+        )
+        child.kill('SIGKILL')
+        finish()
+      }, EXIT_TIMEOUT_MS)
+
+      child.once('exit', finish)
+      child.kill()
+    })
   }
 
   /** The child's environment, with the API key added when the user has configured one. */

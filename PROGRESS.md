@@ -14,6 +14,13 @@
 
 ## Lỗi đã sửa sau bàn giao
 
+### Phase 4
+
+| Ngày | Triệu chứng | Nguyên nhân | Cách sửa |
+|---|---|---|---|
+| 2026-09-09 | Lưu API key, xóa API key hoặc đổi múi giờ có thể để lại **hai** tiến trình backend cùng chạy, hai JVM cùng ghi `data/lifehub.db` | `BackendManager.restartNow()` hạ cờ `shuttingDown` ngay trong cùng tick với `child.kill()`. Sự kiện `exit` chỉ tới ở tick sau, lúc đó `handleExit()` thấy cờ đã hạ và mã thoát khác 0 (trên Windows `kill()` là `TerminateProcess`, mã thoát 1 chứ không phải 0) nên tưởng backend vừa crash và cho chạy chính sách khởi động lại — spawn thêm một backend thứ hai trên port khác. Đường này chạy mỗi lần user dùng đúng ba tính năng Phase 4 vừa thêm | Tách `stopAndWait()`: giữ cờ `shuttingDown` bật suốt thời gian chờ, lắng nghe `exit` một lần rồi mới hạ cờ và gọi `start()`. Có hạn chờ 5 giây kèm `SIGKILL` để không treo màn hình Cài đặt nếu tiến trình cũ không chịu thoát. Thêm bộ test đầu tiên cho `electron/` (`electron/backendManager.test.ts`, 8 case) — đã kiểm chứng test **thất bại** đúng lỗi cũ khi gỡ bản vá: `spawn` bị gọi 3 lần thay vì 2 |
+| 2026-09-09 | `SettingService` lưu giá trị chưa cắt khoảng trắng | `validate()` cắt trước khi kiểm, nhưng `write()` lưu chuỗi gốc. `" DARK "` qua được validate rồi lưu nguyên, làm mọi phép so sánh `equals("DARK")` phía sau trượt — kể cả phép so sánh `useThemeSync.ts` dùng để khôi phục giao diện lúc khởi động | `write()` lưu `value.trim()`. Thêm test `SettingsApiIT.trimsValuesBeforeStoringThem`, đã kiểm chứng thất bại khi gỡ bản vá |
+
 ### Phase 3
 
 | Ngày | Triệu chứng | Nguyên nhân | Cách sửa |
@@ -62,6 +69,13 @@
   bộ luật ngoại tuyến. Đây là suy giảm êm chứ không phải lỗi — user đổi sang model nhanh hơn trong
   Cài đặt là xử lý được. Cần đo thật ở Phase 6 rồi cân nhắc nới timeout (phải xin duyệt vì con số
   nằm trong tài liệu đã chốt).
+
+- [ ] **FR-SYS-09 còn thiếu ô "thư mục backup" trên màn hình Cài đặt.** `01-SRS.md` liệt kê năm mục
+  cho màn hình này: tiền tệ, ngày bắt đầu tuần, timezone, API key, **thư mục backup**. Bốn mục đầu
+  đã có ở Phase 4; mục thứ năm hoãn sang Phase 5 để đi cùng `BackupService` — backend đã nhận và
+  validate `backup.dir` cùng `backup.keep_count` qua `PUT /settings`, nhưng chưa có gì đọc hai khóa
+  đó, nên một ô chọn thư mục lúc này sẽ là một ô không có tác dụng gì. Đây là **khoảng trống thật**
+  so với FR-SYS-09 trong phạm vi Phase 4.
 
 - [ ] **`ai.weekly_insight_cron` chưa có ai đọc.** Khóa nằm trong danh sách setting ghi được và đã
   validate bằng `CronExpression`, nhưng `InsightScheduler` thuộc Phase 5. Cố ý: khóa đã có sẵn từ
@@ -160,6 +174,7 @@
 | A4-17 | Gợi ý danh mục khớp lịch sử so sánh **toàn bộ ghi chú**, đã bỏ dấu và không phân biệt hoa thường | UC-10 ngoại lệ E2 nói "ghi chú trùng khớp". Khớp một phần là phỏng đoán, mà phỏng đoán là việc của model |
 | A4-18 | `RuleBasedParser` không bao giờ ném lỗi; câu không hiểu được trả về `UNKNOWN` | Đây là nhánh chạy khi có thứ khác đã hỏng rồi. Một exception ở đây biến tính năng suy giảm thành tính năng gãy |
 | A4-19 | "Thứ X" đứng một mình mà đã qua trong tuần này thì hiểu là tuần sau; "tuần sau" dịch cả tuần trước rồi mới chọn thứ | Không có quy tắc nào trong tài liệu. Cách này làm `thứ 5 tuần sau` rơi đúng thứ 5 của tuần kế tiếp (T4-11) thay vì tám ngày kể từ thứ 5 gần nhất |
+| A4-21 | Validate schema JSON của AI bằng **kiểm tra tường minh trong `ParseResponseReader`**, không dùng Bean Validation trên một lớp DTO có annotation | AGENTS.md §3.4 mục 3 ghi "Jackson + Bean Validation". Sai lệch có chủ đích: schema ở `04-ARCHITECTURE.md` §7 là một **union** — đúng một trong ba object được điền, tùy theo `intent` — mà Bean Validation không diễn đạt được ràng buộc liên trường đó nếu không có validator tự viết, tức là vẫn phải viết đúng phần logic này bằng tay. Quan trọng hơn: mức độ nghiêm ngặt ở đây **không đồng đều** theo thiết kế (thiếu số tiền thì từ chối cả câu trả lời, thiếu địa điểm thì bỏ qua — UC-09 E4), còn `@NotNull` thì hoặc bật hoặc tắt. Đánh đổi: sai schema báo lỗi ở dạng thông điệp chứ không phải danh sách `ConstraintViolation`; chưa thấy chỗ nào cần danh sách đó. T4-16 kiểm đủ các nhánh từ chối |
 | A4-20 | Khoảng nhắc lạ được **làm tròn** về giá trị gần nhất trong sáu giá trị FR-CAL-06 cho phép (bộ luật), còn kết quả từ AI thì **loại hẳn** | Người viết "nhắc trước 20 phút" nhận được ô 15 phút — gần ý họ hơn là không có nhắc nào, và là thứ form thực sự hiển thị được. Với AI thì khác: prompt đã nêu đúng sáu giá trị hợp lệ, nên một giá trị ngoài danh sách là model làm sai chứ không phải user diễn đạt lạ |
 
 ---
@@ -185,11 +200,16 @@
 | 2026-09-08 | C-3, C-4, C-5, C-6, M-15, M-21 (áp dụng) | `V4` tạo `transaction_tag` và `recurring_rule` theo định nghĩa chốt; unique index của `category` đặt trên `COALESCE(parent_id, '')`; `wallet`, `category`, `budget` đều có `updated_at`, `budget` có `deleted_at`; `idx_wallet_name` là partial index; `start_date` / `next_run_date` / `last_run_date` lưu `TEXT` ISO | Áp dụng phụ lục §6 của `03-DATA-MODEL.md` khi tới đúng phase | ✅ |
 
 > **Phase 4 phát sinh hai mục cần user duyệt: D-3 và E-1 bên dưới.**
+>
+> ⚠️ **Ghi nhận sai sót quy trình:** mã của D-3 và E-1 đã được commit và merge vào `main` **trước**
+> khi được duyệt, trái với AGENTS.md §6 ("duyệt trước rồi mới ghi"). Không viết thêm code cho hai
+> mục này cho tới khi có quyết định; nếu bị bác thì phương án thay thế đã được trình bày kèm.
 
 | Ngày | Mã | Thay đổi | Lý do | User duyệt |
 |---|---|---|---|---|
 | 2026-09-09 | D-3 | Thêm `com.anthropic:anthropic-java` 2.34.0 vào tech stack | `04-ARCHITECTURE.md` §2 chốt `ClaudeAiClient` nhưng bảng stack không có dòng nào cho client gọi LLM. Dùng SDK chính thức thay vì tự gọi REST: nó phân loại sẵn lỗi theo mã HTTP (401 → `UnauthorizedException`, 429 → `RateLimitException`), đúng thứ `NlParseService` cần để chọn `AiErrorCode` cho log và banner. Thêm khoảng 3 MB vào jar, không ảnh hưởng CON-04 | ⏳ **chờ duyệt** |
 | 2026-09-09 | E-1 | `POST /ai/parse` trả thêm `transaction.walletName`, và hình dạng đầy đủ cho `task` / `event`; `GET /settings` trả `{settings, requiresRestart}` thay vì map trần | `06-API-SPEC.md` §8 chỉ vẽ response của giao dịch, không vẽ task và event. Các trường tên là **bổ sung thuần túy** (mọi trường đã đặc tả giữ nguyên) và cần thiết vì frontend phải hiện nhãn khi tên model trả về không khớp danh mục nào của user. `requiresRestart` là cách màn hình Cài đặt biết khi nào phải khởi động lại backend (A4-11) | ⏳ **chờ duyệt** |
+| 2026-09-09 | C-18 | Mở rộng cấu trúc thư mục chốt và bảng kênh IPC: thêm `electron/secureStore.ts`, `electron/vitest.config.ts`, `electron/backendManager.test.ts`, và bốn kênh IPC `secure:set-api-key`, `secure:has-api-key`, `secure:clear-api-key`, `app:restart-backend` | `04-ARCHITECTURE.md` §4 liệt kê hết nội dung thư mục `electron/` và §6.3 liệt kê hết kênh IPC, nhưng cả hai đều được viết trước khi có FR-AI-09. `secure:set-api-key` và `secure:has-api-key` vốn đã được `07-PHASE-PLAN.md` (phạm vi Phase 4, mục Electron) nêu đích danh; `secure:clear-api-key` là mục **thật sự mới** — không xóa được key thì không rút lại được một credential đã lộ. `app:restart-backend` phục vụ A4-11. Cùng dạng mở rộng với C-16 | ⏳ **chờ duyệt** |
 | 2026-09-09 | C-2 (áp dụng) | Theme chuyển từ `localStorage` sang `setting/app.theme` | Thực thi quyết định đã duyệt ở Phase 0, nay `/settings` đã tồn tại | ✅ |
 | 2026-09-09 | V6 (áp dụng) | `V6__ai_module.sql` chỉ tạo `ai_parse_log`, đúng bảng migration ở `03-DATA-MODEL.md` §4 | Thực thi kế hoạch đã chốt | ✅ |
 
