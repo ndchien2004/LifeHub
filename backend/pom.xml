@@ -23,6 +23,7 @@
     <sqlite-jdbc.version>3.45.3.0</sqlite-jdbc.version>
     <uuid-generator.version>5.1.0</uuid-generator.version>
     <ical4j.version>4.0.8</ical4j.version>
+    <anthropic-sdk.version>2.34.0</anthropic-sdk.version>
     <jacoco.version>0.8.12</jacoco.version>
   </properties>
 
@@ -66,6 +67,14 @@
       <groupId>com.fasterxml.uuid</groupId>
       <artifactId>java-uuid-generator</artifactId>
       <version>${uuid-generator.version}</version>
+    </dependency>
+
+    <!-- Claude API client (04-ARCHITECTURE.md 7 — ClaudeAiClient). SDK chinh thuc cua Anthropic;
+         xem PROGRESS.md muc D-3 ve viec bo sung vao bang tech stack. -->
+    <dependency>
+      <groupId>com.anthropic</groupId>
+      <artifactId>anthropic-java</artifactId>
+      <version>${anthropic-sdk.version}</version>
     </dependency>
 
     <!-- RRULE (RFC 5545) — 04-ARCHITECTURE.md 2 -->

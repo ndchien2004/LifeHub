@@ -44,12 +44,13 @@ class FlywayMigrationIT {
             assertThat(tableExists(connection, "flyway_schema_history")).isTrue();
 
             assertThat(scalar(connection, "SELECT COUNT(*) FROM flyway_schema_history"))
-                    .as("Phase 0 có V1, Phase 1 thêm V2, Phase 2 thêm V3, Phase 3 thêm V4 và V5")
-                    .isEqualTo("5");
+                    .as("Phase 0 có V1, Phase 1 thêm V2, Phase 2 thêm V3, "
+                            + "Phase 3 thêm V4 và V5, Phase 4 thêm V6")
+                    .isEqualTo("6");
             assertThat(scalar(connection,
                             "SELECT GROUP_CONCAT(version) FROM "
                                     + "(SELECT version FROM flyway_schema_history ORDER BY installed_rank)"))
-                    .isEqualTo("1,2,3,4,5");
+                    .isEqualTo("1,2,3,4,5,6");
             assertThat(scalar(connection, "SELECT COUNT(*) FROM flyway_schema_history WHERE success = 0"))
                     .as("không migration nào được phép thất bại")
                     .isEqualTo("0");
@@ -149,6 +150,44 @@ class FlywayMigrationIT {
             assertThat(scalar(connection,
                             "SELECT name FROM category WHERE id = '01900000-0000-7000-8000-00000000e103'"))
                     .isEqualTo("Cà phê");
+        }
+    }
+
+    @Test
+    @DisplayName("V6 tạo bảng ai_parse_log kèm index và ràng buộc giá trị")
+    void migrationCreatedTheAiModule() throws Exception {
+        try (Connection connection = dataSource.getConnection(); Statement statement = connection.createStatement()) {
+            assertThat(tableExists(connection, "ai_parse_log")).isTrue();
+            assertThat(scalar(connection,
+                            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' "
+                                    + "AND name = 'idx_ai_parse_log_created'"))
+                    .isEqualTo("1");
+
+            assertThatThrownBy(() -> statement.executeUpdate(
+                            "INSERT INTO ai_parse_log (id, request_type, success, created_at) "
+                                    + "VALUES ('log-bad', 'SOMETHING_ELSE', 0, 0)"))
+                    .as("request_type chỉ nhận ba giá trị của 03-DATA-MODEL.md §2.10")
+                    .hasMessageContaining("CHECK constraint failed");
+
+            assertThatThrownBy(() -> statement.executeUpdate(
+                            "INSERT INTO ai_parse_log (id, request_type, success, error_code, created_at) "
+                                    + "VALUES ('log-bad2', 'NL_PARSE', 0, 'KAPUT', 0)"))
+                    .hasMessageContaining("CHECK constraint failed");
+        }
+    }
+
+    @Test
+    @DisplayName("Không có cột nào trong V6 dành cho API key — key không bao giờ nằm trong DB")
+    void aiLogHasNowhereToStoreAnApiKey() throws Exception {
+        try (Connection connection = dataSource.getConnection()) {
+            // `token_input` and `token_output` are counters, so "token" is deliberately not a
+            // forbidden word here - what must not exist is somewhere to put the credential itself.
+            assertThat(scalar(connection,
+                            "SELECT COUNT(*) FROM pragma_table_info('ai_parse_log') "
+                                    + "WHERE name LIKE '%key%' OR name LIKE '%secret%' "
+                                    + "OR name LIKE '%credential%'"))
+                    .as("NFR-SEC-01: schema không cho phép lưu API key kể cả khi có ai đó muốn")
+                    .isEqualTo("0");
         }
     }
 

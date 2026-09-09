@@ -53,6 +53,16 @@ app:
   data-dir: ${LIFEHUB_DATA_DIR:data}
   log-dir: ${LIFEHUB_LOG_DIR:logs}
 
+  ai:
+    # API key den tu bien moi truong, do Electron doc tu `safeStorage` cua he dieu hanh roi
+    # truyen vao luc spawn. KHONG BAO GIO ghi vao file cau hinh, database hay log (NFR-SEC-01).
+    api-key: ${AI_API_KEY:}
+    # Model mac dinh khi user chua chon trong Settings (setting `ai.model`).
+    default-model: ${AI_MODEL:claude-opus-5}
+    # 04-ARCHITECTURE.md §7: mot lan goi tuong tac co han 5 giay, het thi fallback rule-based.
+    timeout: 5s
+    max-tokens: 1024
+
 logging:
   level:
     com.lifehub: INFO
