@@ -26,6 +26,8 @@ import {
   type EditScope,
   type EventInput,
 } from '../types'
+import { AiFieldHint, aiFieldClass } from '@/features/ai/components/AiFieldHint'
+import type { FieldConfidence } from '@/features/ai/types'
 import { RecurrenceBuilder } from './RecurrenceBuilder'
 
 /**
@@ -68,6 +70,12 @@ interface EventFormDialogProps {
    * Only called for a repeating event.
    */
   requestScope: () => Promise<EditScope | null>
+  /** Prefilled values for a new event, e.g. from the AI command palette (FR-AI-06). */
+  defaults?: Partial<EventFormValues>
+  /** Reminder intervals to preselect alongside {@code defaults}. */
+  defaultReminderOffsets?: number[]
+  /** Per-field AI certainty, which draws the badges beside the labels (UC-09 step 10). */
+  aiConfidence?: FieldConfidence
 }
 
 export function EventFormDialog({
@@ -77,6 +85,9 @@ export function EventFormDialog({
   occurrenceStart,
   defaultStart,
   requestScope,
+  defaults,
+  defaultReminderOffsets,
+  aiConfidence,
 }: EventFormDialogProps) {
   const isEditing = Boolean(event)
   const [recurrence, setRecurrence] = useState<Recurrence>(NO_RECURRENCE)
@@ -107,10 +118,13 @@ export function EventFormDialog({
       setRecurrence(parseRrule(event.rrule))
       setReminderOffsets(event.reminderOffsets ?? [])
     } else {
-      reset(emptyValues(defaultStart ?? null))
+      reset({ ...emptyValues(defaultStart ?? null), ...defaults })
       setRecurrence(NO_RECURRENCE)
-      setReminderOffsets([15])
+      setReminderOffsets(defaultReminderOffsets ?? [15])
     }
+    // `defaults` is a fresh object on every render of the caller, so it is deliberately not a
+    // dependency: including it would reset the form under the user mid-edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, event, defaultStart, reset])
 
   const allDay = watch('allDay')
@@ -210,8 +224,16 @@ export function EventFormDialog({
 
         <form className="space-y-4" onSubmit={onSubmit} noValidate>
           <div className="space-y-1">
-            <Label htmlFor="event-title">Tiêu đề</Label>
-            <Input id="event-title" autoFocus {...register('title')} />
+            <Label htmlFor="event-title" className="flex items-center gap-2">
+              Tiêu đề
+              <AiFieldHint confidence={aiConfidence?.title} />
+            </Label>
+            <Input
+              id="event-title"
+              autoFocus
+              className={aiFieldClass(aiConfidence?.title)}
+              {...register('title')}
+            />
             <FieldError>{errors.title?.message}</FieldError>
           </div>
 
@@ -222,7 +244,10 @@ export function EventFormDialog({
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1">
-              <Label htmlFor="event-start">Bắt đầu</Label>
+              <Label htmlFor="event-start" className="flex items-center gap-2">
+                Bắt đầu
+                <AiFieldHint confidence={aiConfidence?.startAt} />
+              </Label>
               <Input
                 id="event-start"
                 type={allDay ? 'date' : 'datetime-local'}
@@ -231,7 +256,10 @@ export function EventFormDialog({
               <FieldError>{errors.startAt?.message}</FieldError>
             </div>
             <div className="space-y-1">
-              <Label htmlFor="event-end">Kết thúc</Label>
+              <Label htmlFor="event-end" className="flex items-center gap-2">
+                Kết thúc
+                <AiFieldHint confidence={aiConfidence?.endAt} />
+              </Label>
               <Input id="event-end" type={allDay ? 'date' : 'datetime-local'} {...register('endAt')} />
               <FieldError>{errors.endAt?.message}</FieldError>
             </div>

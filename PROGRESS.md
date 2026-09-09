@@ -6,7 +6,7 @@
 | 1 — Task & Project | ✅ Xong | 2026-09-08 | Đã merge vào `main`; bảng này lúc đó chưa được cập nhật |
 | 2 — Calendar & Reminder | ✅ Xong | 2026-09-08 | 240 backend test + 61 frontend test PASS |
 | 3 — Finance | ✅ Xong | 2026-09-08 | 304 backend test + 85 frontend test PASS. Đã sửa lỗi ngân sách trên danh mục con (xem "Lỗi đã sửa sau bàn giao") |
-| 4 — AI Layer | ⏸ Chờ | | |
+| 4 — AI Layer | ✅ Xong | 2026-09-09 | 438 backend test + 107 frontend test PASS |
 | 5 — Insight, Report, Import | ⏸ Chờ | | |
 | 6 — Đóng gói & phát hành | ⏸ Chờ | | |
 
@@ -41,13 +41,13 @@
 - [ ] **Cảnh báo `npm audit` ở devDependencies**: `extract-zip` (qua `electron`) và `esbuild`
   (qua `vite@5`). Dependency chạy thật: 0 lỗ hổng. Không sửa vì `npm audit fix --force` sẽ nâng
   Vite/Electron vượt phiên bản đã chốt trong `04-ARCHITECTURE.md` §2.
-- [ ] **`displayZone` được phân giải một lần lúc khởi động** (`TimeConfig`). Đổi `app.timezone`
-  trong Settings ở Phase 4 sẽ phải làm mới bean này hoặc khởi động lại backend. Phase 2 dùng nó ở
-  thêm hai chỗ (`ReminderService` dựng nội dung thông báo, `TaskService` tính mốc lặp kế tiếp) nên
-  phạm vi ảnh hưởng rộng hơn trước.
+- [x] ~~**`displayZone` được phân giải một lần lúc khởi động**~~ — xử lý ở Phase 4 (A4-11):
+  `PUT /settings` trả thêm cờ `requiresRestart`, và màn hình Cài đặt gọi IPC `app:restart-backend`
+  để khởi động lại tiến trình Java. Bean vẫn chỉ đọc setting một lần; điều đổi là user không còn
+  phải tự đoán ra rằng cần khởi động lại.
 - [ ] **Thời gian khởi động backend ~5,0 giây khi chạy lạnh** (đo trên máy dev, JVM chưa warm).
   NFR-PERF-01 là ≤ 6 giây tổng. Còn biên nhưng hẹp — cần đo lại ở Phase 6 với JRE rút gọn.
-- [ ] **Bundle renderer đã vượt 500 kB** (967 kB, gzip 277 kB) sau khi thêm Recharts. Với app
+- [ ] **Bundle renderer đã vượt 500 kB** (995 kB, gzip 284 kB sau Phase 4) sau khi thêm Recharts. Với app
   desktop nạp từ `file://` thì không có chi phí mạng, nên chưa ảnh hưởng NFR-PERF-01, nhưng nên
   tách chunk cho phần biểu đồ ở Phase 6.
 - [ ] **Backup trước migration chưa tự động** (AGENTS.md §3.3 mục 3). `BackupService` thuộc Phase 5
@@ -56,6 +56,17 @@
 - [ ] **Ví chưa có thao tác sắp xếp lại trên giao diện.** Cột `sort_order` có trong schema và API
   `PATCH /wallets/{id}` nhận được, nhưng màn hình Ví chưa có kéo thả — danh sách xếp theo
   `sort_order` rồi `created_at`.
+- [ ] **Ngân sách 5 giây có thể quá chặt với model mặc định.** `04-ARCHITECTURE.md` §7 và UC-09 E1
+  chốt timeout 5 giây cho một lần parse tương tác, còn mặc định đã chọn là `claude-opus-5` (A4-04).
+  Client đặt `effort = LOW` để giảm độ trễ, nhưng trên mạng chậm vẫn có thể chạm trần và rơi xuống
+  bộ luật ngoại tuyến. Đây là suy giảm êm chứ không phải lỗi — user đổi sang model nhanh hơn trong
+  Cài đặt là xử lý được. Cần đo thật ở Phase 6 rồi cân nhắc nới timeout (phải xin duyệt vì con số
+  nằm trong tài liệu đã chốt).
+
+- [ ] **`ai.weekly_insight_cron` chưa có ai đọc.** Khóa nằm trong danh sách setting ghi được và đã
+  validate bằng `CronExpression`, nhưng `InsightScheduler` thuộc Phase 5. Cố ý: khóa đã có sẵn từ
+  `V1` nên không phát sinh migration khi tới phase đó.
+
 - [ ] **`GET /transactions/summary` gom nhóm trong bộ nhớ.** Bắt buộc vì SQLite không có hàm ngày
   giờ hiểu múi giờ (xem giả định A3-07). An toàn với cửa sổ thời gian mà giao diện đang dùng
   (tối đa 1 năm), nhưng nếu Phase 5 cần báo cáo nhiều năm thì phải tính lại bằng SQL hoặc bảng
@@ -126,6 +137,31 @@
 | A3-19 | Danh sách giao dịch tải thêm bằng **nút "Tải thêm"**, không tự nạp khi cuộn | Phase plan ghi "infinite scroll". Nút cho kết quả tương đương về số request nhưng dùng được bằng bàn phím, không nuốt mất thanh cuộn, và không nạp thêm ngoài ý muốn khi user chỉ đang lướt tìm một dòng |
 | A3-20 | Thêm `recharts` vào `package.json` | `04-ARCHITECTURE.md` §2 đã chốt Recharts là thư viện biểu đồ nhưng gói chưa từng được cài (Phase 0–2 không có biểu đồ nào) |
 
+### Phase 4
+
+| # | Giả định | Lý do |
+|---|---|---|
+| A4-01 | `AiClient` chỉ là **cổng truyền tải** (prompt vào, text ra, kèm số token); dựng prompt, làm sạch JSON, validate schema và **thử lại một lần** đều nằm ở tầng trên | SD-02 vẽ sanitize/validate bên trong `ClaudeAiClient`, nhưng T4-18 yêu cầu *"AiClient mock trả JSON sai schema → retry 1 lần"* — muốn kiểm chứng được số lần thử thì vòng lặp phải nằm **ngoài** client. Cách chia này cũng đúng danh sách 8 bước ở `04-ARCHITECTURE.md` §7, nơi "thử lại" là bước 6 chứ không phải một phần của bước 3 |
+| A4-02 | Thêm ba cổng nữa ở `domain/ai`: `PromptTemplates`, `AiResponseReader`, `FallbackParser` | `04-ARCHITECTURE.md` §3 luật 2 bắt `infrastructure` implement interface do `domain` định nghĩa. `PromptBuilder`, `ParseResponseReader` và `RuleBasedParser` đều sống ở `infrastructure/ai` theo cấu trúc chốt, nên `NlParseService` (tầng `application`) chỉ được nhìn thấy chúng qua cổng |
+| A4-03 | Template prompt là **một file cho mỗi tác vụ**, chia phần hệ thống và phần người dùng bằng dòng đánh dấu `=== USER ===` | Giữ đúng danh sách file ở `04-ARCHITECTURE.md` §4 (`nl-parse.txt`, `category-suggest.txt`) mà vẫn không nhúng một chữ nào của prompt vào mã Java |
+| A4-04 | Model mặc định là `claude-opus-5`; Cài đặt cho chọn thêm Sonnet 5 và Haiku 4.5 | Tài liệu chỉ nói "tên model do user chọn" (`03-DATA-MODEL.md` §2.11), không nêu mặc định. Chọn model mạnh nhất làm mặc định và để việc hạ cấp cho user quyết định; ô chọn ghi rõ đánh đổi tốc độ. Xem mục nợ kỹ thuật về trần 5 giây |
+| A4-05 | `output_config.effort = LOW` cho mọi lời gọi | Biến một câu tiếng Việt ngắn thành sáu trường không phải bài toán suy luận, còn ngân sách tương tác chỉ có 5 giây — để mức suy nghĩ sâu sẽ tiêu hết ngân sách rồi rơi xuống fallback |
+| A4-06 | **Mọi** lời gọi `/ai/parse` đều ghi một dòng `ai_parse_log`, kể cả khi AI đang tắt (khi đó `success = 0`, `error_code = NULL`) | SD-02 đặt bước `save(AiParseLog)` **sau** cả khối `alt`, tức là nhánh "AI bị tắt" cũng đi qua. Nhờ vậy số dòng log luôn khớp số lần user nhấn Enter, và UAT kiểm được "không có lời gọi API nào" bằng cột `model` để trống |
+| A4-07 | Số tiền dưới 1.000 mà **không có** ký hiệu tiền tệ thì nhân 1.000 — áp dụng **sau** khi đã nhân hệ số đơn vị | Đây là quy tắc duy nhất làm cả `500 → 500.000` (T4-09) lẫn `3 trăm rưỡi → 350.000` (T4-08) cùng đúng: `3 × 100 + 50 = 350`, vẫn dưới 1.000 nên thành 350.000. `1.500.000đ` có hậu tố `đ` nên giữ nguyên |
+| A4-08 | Bộ luật ngoại tuyến **cắt** phần đã trở thành trường (ngày, giờ, nhắc hẹn, số tiền) ra khỏi tiêu đề | Để nguyên cả câu thì form sự kiện sẽ hiện "họp review sprint thứ 5 tuần sau 2h chiều nhắc trước 15 phút" ngay cạnh chính các ô đang giữ phần còn lại. Cắt được là nhờ `TextFolding` bỏ dấu mà **không đổi độ dài**, nên chỉ số tìm trên "thu 5" khớp đúng với "thứ 5" trong câu gốc |
+| A4-09 | Kết quả parse hiển thị bằng **chính ba form tạo mới đã có**, chỉ thêm `defaults` và `aiConfidence`, thay vì dựng một form riêng | `04-ARCHITECTURE.md` §4 có nhắc `ParseResultForm.tsx`, và file đó vẫn tồn tại — nhưng nó điều phối chứ không dựng lại form. Dùng lại form thật nghĩa là đường AI và đường gõ tay có **chung** một bộ validate Zod và một mutation lưu, nên không thể tồn tại một lối tạo giao dịch thứ hai lỏng lẻo hơn |
+| A4-10 | Frontend là nơi áp ngưỡng `confidence < 0.6` (để trống + tô cảnh báo); backend trả nguyên `fieldConfidence` | UC-09 luồng 10a mô tả đây là hành vi của giao diện. Backend giữ nguyên số liệu để màn hình Nhật ký AI còn xem được AI thực sự tự tin bao nhiêu |
+| A4-11 | `PUT /settings` trả thêm cờ `requiresRestart`; đổi `app.timezone` khiến renderer gọi IPC khởi động lại backend | `TimeConfig.displayZone` chỉ đọc setting một lần lúc khởi động (nợ kỹ thuật từ Phase 0). Lựa chọn còn lại là để user tự phát hiện ra rằng thay đổi của họ không có tác dụng gì |
+| A4-12 | API key cất ở `userData/secure/ai-api-key.bin` qua `safeStorage`, **ngoài** thư mục `data/` | `data/` là thứ được sao lưu và khôi phục (Phase 5). Một bản backup vô tình mang theo credential là đúng loại rò rỉ mà NFR-SEC-01 muốn chặn |
+| A4-13 | Lưu hoặc xóa API key sẽ **khởi động lại tiến trình backend** | `03-DATA-MODEL.md` §2.11 chốt "backend nhận qua biến môi trường lúc spawn". Không có cách đưa biến môi trường mới vào một JVM đang chạy, và bịa ra một endpoint nhận secret qua HTTP thì đi ngược đúng lý do key không nằm trong database |
+| A4-14 | Máy không có kho bảo mật (`safeStorage` không khả dụng) thì key chỉ sống trong bộ nhớ của phiên hiện tại, và giao diện nói rõ điều đó | Ghi ra file dạng thường vi phạm thẳng NFR-SEC-01. Từ chối hẳn thì chặn luôn một người dùng Linux hoàn toàn hợp lệ |
+| A4-15 | `POST /ai/test-connection` **không** ghi `ai_parse_log` | Cột `request_type` chỉ nhận ba giá trị `NL_PARSE` / `CATEGORY_SUGGEST` / `WEEKLY_INSIGHT` (`03-DATA-MODEL.md` §2.10). Thử kết nối không phải một lần parse; nhét nó vào một trong ba loại kia sẽ làm sai số liệu của chính bảng log |
+| A4-16 | `PUT /settings` chỉ nhận **danh sách khóa cho phép**, mỗi khóa kèm luật kiểm giá trị | Bảng `setting` là key-value trần. Không có danh sách trắng thì một lỗi gõ trong màn hình Cài đặt sẽ âm thầm tạo ra một setting không ai đọc, và user ngồi nhìn một giá trị không có tác dụng gì. `db.schema_version` cố ý **không** nằm trong danh sách — Flyway sở hữu nó |
+| A4-17 | Gợi ý danh mục khớp lịch sử so sánh **toàn bộ ghi chú**, đã bỏ dấu và không phân biệt hoa thường | UC-10 ngoại lệ E2 nói "ghi chú trùng khớp". Khớp một phần là phỏng đoán, mà phỏng đoán là việc của model |
+| A4-18 | `RuleBasedParser` không bao giờ ném lỗi; câu không hiểu được trả về `UNKNOWN` | Đây là nhánh chạy khi có thứ khác đã hỏng rồi. Một exception ở đây biến tính năng suy giảm thành tính năng gãy |
+| A4-19 | "Thứ X" đứng một mình mà đã qua trong tuần này thì hiểu là tuần sau; "tuần sau" dịch cả tuần trước rồi mới chọn thứ | Không có quy tắc nào trong tài liệu. Cách này làm `thứ 5 tuần sau` rơi đúng thứ 5 của tuần kế tiếp (T4-11) thay vì tám ngày kể từ thứ 5 gần nhất |
+| A4-20 | Khoảng nhắc lạ được **làm tròn** về giá trị gần nhất trong sáu giá trị FR-CAL-06 cho phép (bộ luật), còn kết quả từ AI thì **loại hẳn** | Người viết "nhắc trước 20 phút" nhận được ô 15 phút — gần ý họ hơn là không có nhắc nào, và là thứ form thực sự hiển thị được. Với AI thì khác: prompt đã nêu đúng sáu giá trị hợp lệ, nên một giá trị ngoài danh sách là model làm sai chứ không phải user diễn đạt lạ |
+
 ---
 
 ## Quyết định thay đổi so với tài liệu
@@ -147,6 +183,15 @@
 | 2026-09-08 | D-2 | `Patch<T>` chuyển từ `TaskCommands` sang `domain/common/Patch.java`; thêm `api/common/JsonPatchReader` | Module calendar cũng cần cả hai. Để nguyên chỗ cũ thì `application.calendar` phải phụ thuộc `application.task`, và ba controller sẽ mang ba bản sao của cùng một đoạn đọc JSON. `domain/common` đã có trong cấu trúc chốt nên không phát sinh thư mục mới | ✅ |
 | 2026-09-08 | B-1 (áp dụng) | `recurring_rule` đã được tạo trong `V4__finance_module.sql` ở Phase 3 đúng như quyết định trên | Thực thi quyết định đã duyệt | ✅ |
 | 2026-09-08 | C-3, C-4, C-5, C-6, M-15, M-21 (áp dụng) | `V4` tạo `transaction_tag` và `recurring_rule` theo định nghĩa chốt; unique index của `category` đặt trên `COALESCE(parent_id, '')`; `wallet`, `category`, `budget` đều có `updated_at`, `budget` có `deleted_at`; `idx_wallet_name` là partial index; `start_date` / `next_run_date` / `last_run_date` lưu `TEXT` ISO | Áp dụng phụ lục §6 của `03-DATA-MODEL.md` khi tới đúng phase | ✅ |
+
+> **Phase 4 phát sinh hai mục cần user duyệt: D-3 và E-1 bên dưới.**
+
+| Ngày | Mã | Thay đổi | Lý do | User duyệt |
+|---|---|---|---|---|
+| 2026-09-09 | D-3 | Thêm `com.anthropic:anthropic-java` 2.34.0 vào tech stack | `04-ARCHITECTURE.md` §2 chốt `ClaudeAiClient` nhưng bảng stack không có dòng nào cho client gọi LLM. Dùng SDK chính thức thay vì tự gọi REST: nó phân loại sẵn lỗi theo mã HTTP (401 → `UnauthorizedException`, 429 → `RateLimitException`), đúng thứ `NlParseService` cần để chọn `AiErrorCode` cho log và banner. Thêm khoảng 3 MB vào jar, không ảnh hưởng CON-04 | ⏳ **chờ duyệt** |
+| 2026-09-09 | E-1 | `POST /ai/parse` trả thêm `transaction.walletName`, và hình dạng đầy đủ cho `task` / `event`; `GET /settings` trả `{settings, requiresRestart}` thay vì map trần | `06-API-SPEC.md` §8 chỉ vẽ response của giao dịch, không vẽ task và event. Các trường tên là **bổ sung thuần túy** (mọi trường đã đặc tả giữ nguyên) và cần thiết vì frontend phải hiện nhãn khi tên model trả về không khớp danh mục nào của user. `requiresRestart` là cách màn hình Cài đặt biết khi nào phải khởi động lại backend (A4-11) | ⏳ **chờ duyệt** |
+| 2026-09-09 | C-2 (áp dụng) | Theme chuyển từ `localStorage` sang `setting/app.theme` | Thực thi quyết định đã duyệt ở Phase 0, nay `/settings` đã tồn tại | ✅ |
+| 2026-09-09 | V6 (áp dụng) | `V6__ai_module.sql` chỉ tạo `ai_parse_log`, đúng bảng migration ở `03-DATA-MODEL.md` §4 | Thực thi kế hoạch đã chốt | ✅ |
 
 > Các mục C-3 → C-15, C-17 và M-5 → M-22 đã được duyệt và ghi trong phụ lục §6 của
 > `03-DATA-MODEL.md` (sửa đổi schema) hoặc áp dụng trực tiếp ở phase tương ứng. Chúng sẽ được

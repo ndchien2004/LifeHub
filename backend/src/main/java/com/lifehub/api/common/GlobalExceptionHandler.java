@@ -1,5 +1,8 @@
 package com.lifehub.api.common;
 
+import com.lifehub.domain.ai.AiInvalidResponseException;
+import com.lifehub.domain.ai.AiNotConfiguredException;
+import com.lifehub.domain.ai.AiUnavailableException;
 import com.lifehub.domain.common.ConflictException;
 import com.lifehub.domain.common.DomainException;
 import com.lifehub.domain.common.IdGenerator;
@@ -49,6 +52,41 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DomainException.class)
     public ResponseEntity<ApiResponse<Void>> handleDomain(DomainException ex) {
         return build(ErrorCode.VALIDATION_ERROR, ex.getMessage(), ex.getField(), ex, false);
+    }
+
+    /**
+     * No API key, on an endpoint that cannot answer without one.
+     *
+     * <p>428 rather than 401: the request was authenticated to this application perfectly well, it
+     * is the AI provider credential that is missing, and the UI reacts by pointing at the Settings
+     * screen instead of at a login (04-ARCHITECTURE.md 8).
+     */
+    @ExceptionHandler(AiNotConfiguredException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAiNotConfigured(AiNotConfiguredException ex) {
+        return build(ErrorCode.AI_NOT_CONFIGURED, ex.getMessage(), null, ex, false);
+    }
+
+    /**
+     * The provider answered with something that was not the agreed JSON.
+     *
+     * <p>Rarely reaches here: {@code NlParseService} retries once and then falls back to the rule
+     * based parser, so a user typing into the command palette sees a result rather than this error.
+     * It surfaces for callers that have no fallback of their own.
+     */
+    @ExceptionHandler(AiInvalidResponseException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAiInvalidResponse(AiInvalidResponseException ex) {
+        return build(ErrorCode.AI_INVALID_RESPONSE, ex.getMessage(), null, ex, false);
+    }
+
+    /**
+     * The provider could not be reached, refused the key, or throttled.
+     *
+     * <p>The message is already written for the user and carries no provider detail, so a wrong key
+     * reads as "API key không hợp lệ" rather than as a stack trace (NFR-USE-03).
+     */
+    @ExceptionHandler(AiUnavailableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAiUnavailable(AiUnavailableException ex) {
+        return build(ErrorCode.AI_UNAVAILABLE, ex.getMessage(), null, ex, false);
     }
 
     /** Bean Validation failure on a request DTO. Reports the first offending field. */

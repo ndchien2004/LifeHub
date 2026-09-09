@@ -15,6 +15,10 @@ export function stubLifeHubBridge(overrides: Partial<LifeHubBridge> = {}): LifeH
     getNotificationPermission: vi.fn().mockResolvedValue('granted'),
     onReminderFired: vi.fn().mockReturnValue(() => {}),
     onNavigate: vi.fn().mockReturnValue(() => {}),
+    setApiKey: vi.fn().mockResolvedValue({ persisted: true, hasKey: true }),
+    hasApiKey: vi.fn().mockResolvedValue({ hasKey: false, encryptionAvailable: true }),
+    clearApiKey: vi.fn().mockResolvedValue({ hasKey: false }),
+    restartBackend: vi.fn().mockResolvedValue({ port: 51234, token: 'secret-token' }),
     ...overrides,
   }
   window.lifehub = bridge

@@ -4,6 +4,13 @@ import { BackendManager, type BackendInfo } from './backendManager'
 import { ReminderNotifier } from './reminderNotifier'
 import { ReminderStream, type ReminderNotification } from './reminderStream'
 import { createTray, type TrayController } from './tray'
+import {
+  clearApiKey,
+  getApiKey,
+  hasApiKey,
+  isEncryptionAvailable,
+  setApiKey,
+} from './secureStore'
 
 /**
  * Electron main process — application entry point.
@@ -53,6 +60,8 @@ const backend = new BackendManager({
   jarPath,
   dataDir,
   logDir,
+  // Read at every spawn so a key pasted into Settings takes effect on the next restart.
+  getApiKey,
   onRestarted: (info) => {
     // A restart means a new port and a new token, so the push channel has to be retargeted too.
     notifier.setBackendInfo(info)
@@ -201,6 +210,37 @@ ipcMain.handle('app:get-backend-info', () => {
  * needs to make.
  */
 ipcMain.handle('notification:permission', () => (notifier.isSupported() ? 'granted' : 'denied'))
+
+/**
+ * Stores the AI API key in the OS credential store and restarts the backend so it picks it up.
+ *
+ * The key reaches the backend only through the environment of the process it spawns, so a new key
+ * means a new process — there is no way to hand it to a running JVM, and inventing one would mean
+ * an endpoint that accepts a secret over HTTP.
+ */
+ipcMain.handle('secure:set-api-key', async (_event, key: unknown) => {
+  if (typeof key !== 'string') {
+    throw new Error('API key phải là chuỗi.')
+  }
+
+  const { persisted } = setApiKey(key)
+  await backend.restartNow()
+  return { persisted, hasKey: hasApiKey() }
+})
+
+ipcMain.handle('secure:has-api-key', () => ({
+  hasKey: hasApiKey(),
+  encryptionAvailable: isEncryptionAvailable(),
+}))
+
+ipcMain.handle('secure:clear-api-key', async () => {
+  clearApiKey()
+  await backend.restartNow()
+  return { hasKey: false }
+})
+
+/** Applies a setting the backend only reads at startup, such as the display timezone. */
+ipcMain.handle('app:restart-backend', () => backend.restartNow())
 
 // One instance only: two processes writing the same SQLite file is asking for trouble.
 if (!app.requestSingleInstanceLock()) {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { BellOff } from 'lucide-react'
 import { AppLayout } from '@/shared/components/AppLayout'
+import { CommandPalette } from '@/features/ai/CommandPalette'
 import { Toaster } from '@/shared/components/ui/toast'
 import { CalendarPage } from '@/features/calendar/CalendarPage'
 import { MissedRemindersModal } from '@/features/calendar/components/MissedRemindersModal'
@@ -8,6 +9,8 @@ import { useReminders } from '@/features/calendar/useReminders'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
 import { useBootstrap } from '@/features/dashboard/useBootstrap'
 import { FinancePage } from '@/features/finance/FinancePage'
+import { SettingsPage } from '@/features/settings/SettingsPage'
+import { useThemeSync } from '@/features/settings/useThemeSync'
 import { ProjectsPage } from '@/features/tasks/ProjectsPage'
 import { TasksPage } from '@/features/tasks/TasksPage'
 import { useTheme } from '@/shared/hooks/useTheme'
@@ -16,6 +19,8 @@ import { useNavStore } from '@/shared/stores/navStore'
 export default function App() {
   // Mounted once at the root so the html class tracks the stored preference app-wide.
   useTheme()
+  // Phase 4 moves that preference into `setting/app.theme` (PROGRESS.md C-2).
+  useThemeSync()
   const route = useNavStore((state) => state.route)
   const navigate = useNavStore((state) => state.navigate)
   const { notificationsBlocked } = useReminders()
@@ -52,6 +57,7 @@ export default function App() {
         {route === 'projects' && <ProjectsPage />}
         {route === 'calendar' && <CalendarPage />}
         {route === 'finance' && <FinancePage />}
+        {route === 'settings' && <SettingsPage />}
       </AppLayout>
 
       <MissedRemindersModal
@@ -63,6 +69,9 @@ export default function App() {
           navigate('calendar')
         }}
       />
+
+      {/* Ctrl+Space from any screen (FR-AI-01). Lives at the root so no page has to know. */}
+      <CommandPalette />
 
       <Toaster />
     </>

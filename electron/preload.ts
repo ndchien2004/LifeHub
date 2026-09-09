@@ -33,6 +33,18 @@ export interface NavigateRequest {
   id: string
 }
 
+export interface ApiKeyState {
+  hasKey: boolean
+  /** False when the OS has no credential store, so a key cannot outlive the session. */
+  encryptionAvailable: boolean
+}
+
+export interface SetApiKeyResult {
+  /** False when the key works now but could not be written to the credential store. */
+  persisted: boolean
+  hasKey: boolean
+}
+
 /** Subscribes to an IPC channel and hands back the matching unsubscribe. */
 function subscribe<T>(channel: string, listener: (payload: T) => void): () => void {
   const handler = (_event: unknown, payload: T) => listener(payload)
@@ -59,4 +71,21 @@ contextBridge.exposeInMainWorld('lifehub', {
   /** The user clicked a notification; take them to the event or task it points at. */
   onNavigate: (listener: (request: NavigateRequest) => void): (() => void) =>
     subscribe('app:navigate', listener),
+
+  /**
+   * Stores the AI API key in the OS credential store and restarts the backend (FR-AI-09).
+   *
+   * The key crosses this bridge once, on its way to safeStorage. It is never read back out — the
+   * renderer can ask whether one exists, never what it is.
+   */
+  setApiKey: (key: string): Promise<SetApiKeyResult> =>
+    ipcRenderer.invoke('secure:set-api-key', key),
+
+  /** Whether a key is stored, and whether this machine can store one at all. */
+  hasApiKey: (): Promise<ApiKeyState> => ipcRenderer.invoke('secure:has-api-key'),
+
+  clearApiKey: (): Promise<{ hasKey: boolean }> => ipcRenderer.invoke('secure:clear-api-key'),
+
+  /** Restarts the backend so settings it only reads at startup take effect. */
+  restartBackend: (): Promise<BackendInfo> => ipcRenderer.invoke('app:restart-backend'),
 })

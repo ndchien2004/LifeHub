@@ -1,5 +1,6 @@
 package com.lifehub.application.system;
 
+import com.lifehub.application.ai.AiSettings;
 import com.lifehub.application.calendar.ReminderService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,20 +16,26 @@ public class BootstrapService {
     private final SettingService settingService;
     private final ReminderService reminderService;
     private final DashboardService dashboardService;
+    private final AiSettings aiSettings;
 
     public BootstrapService(
             SettingService settingService,
             ReminderService reminderService,
-            DashboardService dashboardService) {
+            DashboardService dashboardService,
+            AiSettings aiSettings) {
         this.settingService = settingService;
         this.reminderService = reminderService;
         this.dashboardService = dashboardService;
+        this.aiSettings = aiSettings;
     }
 
     @Transactional(readOnly = true)
     public BootstrapData load() {
         return new BootstrapData(
-                settingService.findAll(), false, reminderService.findMissed(), dashboard());
+                settingService.findAll(),
+                aiSettings.isConfigured(),
+                reminderService.findMissed(),
+                dashboard());
     }
 
     /**
