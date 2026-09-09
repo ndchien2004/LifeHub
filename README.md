@@ -6,6 +6,10 @@ có lớp AI hỗ trợ nhập liệu bằng tiếng Việt tự nhiên.
 Dữ liệu lưu hoàn toàn trên máy trong một file SQLite. Chỉ nội dung gửi cho AI parse
 mới rời khỏi thiết bị.
 
+API key của bạn được mã hóa bằng kho bảo mật của hệ điều hành (DPAPI trên Windows, Keychain trên
+macOS, libsecret trên Linux) và truyền cho backend qua biến môi trường lúc spawn — nó không bao giờ
+được ghi vào database, file cấu hình hay log.
+
 ---
 
 ## Yêu cầu môi trường
@@ -42,6 +46,9 @@ dev server ở cổng 5173 → mở Electron. Electron tự tìm một cổng tr
 | `npm run build` | Build cả 3 tiến trình ở chế độ production |
 | `npm run backend:build` | Chỉ build lại jar backend |
 
+> **Lưu ý khi build lại:** đóng hẳn ứng dụng trước (menu tray → Thoát). Tiến trình Java đang chạy
+> giữ file `backend/target/lifehub-backend.jar`, nên Maven sẽ không ghi đè được.
+
 Báo cáo coverage backend: `backend/target/site/jacoco/index.html`
 
 ---
@@ -68,6 +75,7 @@ LifeHub/
 **Phase 1 — Task & Project: xong.**
 **Phase 2 — Calendar & Reminder: xong.**
 **Phase 3 — Finance: xong.**
+**Phase 4 — AI Layer: xong.**
 
 Đang chạy được:
 
@@ -85,6 +93,18 @@ LifeHub/
   cao, giao dịch định kỳ tự sinh và bù các lần bị lỡ.
 - **Tổng quan** — dashboard gộp việc hôm nay, việc quá hạn, sự kiện sắp tới, thu chi tháng này
   và các ngân sách sắp vượt.
+- **Nhập nhanh bằng tiếng Việt** — `Ctrl` + `Space` ở bất kỳ màn hình nào, gõ tự do
+  (`ăn trưa cơm gà 45k với team`, `họp review sprint thứ 5 tuần sau 2h chiều nhắc trước 15 phút`)
+  rồi rà soát form đã điền sẵn. Trường do AI suy ra có badge kèm độ tin cậy; trường AI không chắc
+  thì để trống và tô cảnh báo thay vì đoán bừa. **Không có gì được ghi vào database cho tới khi
+  bạn bấm Lưu.**
+- **Chế độ ngoại tuyến** — mất mạng, hết hạn mức hay tắt AI thì bộ luật tiếng Việt tại chỗ tiếp
+  quản (hiểu `45k`, `1tr2`, `2 triệu rưỡi`, `thứ 5 tuần sau`, `2h chiều`, `cuối tháng`), kèm banner
+  nói rõ đang chạy ngoại tuyến.
+- **Gợi ý danh mục** — gõ ghi chú giao dịch rồi dừng tay, ba chip danh mục hiện ngay dưới ô chọn.
+  Ghi chú đã từng phân loại thì dùng lại lịch sử của bạn, không tốn lời gọi AI.
+- **Cài đặt** — giao diện, múi giờ, ngày bắt đầu tuần, tiền tệ, bật/tắt AI, chọn model, nhập API
+  key và xem nhật ký mọi lần gọi AI.
 
 Xem `PROGRESS.md` để biết tiến độ đầy đủ và `docs/07-PHASE-PLAN.md` để biết phase kế tiếp.
 
