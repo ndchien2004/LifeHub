@@ -1,6 +1,7 @@
 package com.lifehub.api.ai;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -23,11 +24,15 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 /**
- * T4-20, T4-22 and T4-23 end to end, plus the acceptance criterion the phase plan puts in bold.
+ * T4-20 and T4-23 end to end, plus the acceptance criterion the phase plan puts in bold.
  *
  * <p>No API key is configured in the test profile, so every call here takes the offline branch of
  * SD-02. That is deliberate: it is the branch a user hits when the network is down, and it is the
  * one that must never throw.
+ *
+ * <p>T4-22 - grepping {@code data/} and {@code logs/} for the key - is covered by
+ * {@link ApiKeyLeakIT}, which needs a key actually configured and so cannot share this class's
+ * context.
  */
 class AiApiIT extends ApiIntegrationTest {
 
@@ -65,8 +70,11 @@ class AiApiIT extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.data.source").value("RULE"))
                 .andExpect(jsonPath("$.data.transaction.amount").value(45000))
                 .andExpect(jsonPath("$.data.transaction.type").value("EXPENSE"))
-                .andExpect(jsonPath("$.data.task").doesNotExist())
-                .andExpect(jsonPath("$.data.event").doesNotExist());
+                // value(nullValue()) rather than doesNotExist(): the latter also passes when the
+                // member is absent, and 06-API-SPEC.md §8 documents the shape as an explicit
+                // "task": null. An omitted member would break a client reading result.task.
+                .andExpect(jsonPath("$.data.task").value(nullValue()))
+                .andExpect(jsonPath("$.data.event").value(nullValue()));
     }
 
     @Test
@@ -75,7 +83,9 @@ class AiApiIT extends ApiIntegrationTest {
         mockMvc.perform(authed(post("/api/v1/ai/parse")).content(parseBody("mua quà sinh nhật mẹ")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.intent").value("TASK"))
-                .andExpect(jsonPath("$.data.task.title").value("mua quà sinh nhật mẹ"));
+                .andExpect(jsonPath("$.data.task.title").value("mua quà sinh nhật mẹ"))
+                .andExpect(jsonPath("$.data.transaction").value(nullValue()))
+                .andExpect(jsonPath("$.data.event").value(nullValue()));
     }
 
     @Test

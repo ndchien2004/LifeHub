@@ -82,6 +82,21 @@ class SettingsApiIT extends ApiIntegrationTest {
     }
 
     @Test
+    @DisplayName("Giá trị có khoảng trắng thừa được cắt trước khi lưu, không lưu nguyên")
+    void trimsValuesBeforeStoringThem() throws Exception {
+        // Validation already trims before checking, so " DARK " passes. If the write kept the raw
+        // string, every later comparison against "DARK" would fail - including the one the renderer
+        // uses to restore the theme at startup.
+        mockMvc.perform(authed(put("/api/v1/settings"))
+                        .content(json(Map.of("app.theme", "  DARK  "))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.settings['app.theme']").value("DARK"));
+
+        mockMvc.perform(authed(get("/api/v1/settings")))
+                .andExpect(jsonPath("$.data.settings['app.theme']").value("DARK"));
+    }
+
+    @Test
     @DisplayName("Khóa lạ bị từ chối thay vì âm thầm tạo một setting không ai đọc")
     void rejectsUnknownKeys() throws Exception {
         mockMvc.perform(authed(put("/api/v1/settings"))

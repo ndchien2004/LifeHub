@@ -100,9 +100,18 @@ public class SettingService {
         return keys.contains(TIMEZONE);
     }
 
+    /**
+     * Stores the trimmed value.
+     *
+     * <p>{@link #validate} already trims before checking, so writing the raw string would store
+     * something the validator never saw: {@code " DARK "} would pass and then fail every
+     * {@code equals("DARK")} downstream, leaving the Settings screen showing a theme the renderer
+     * cannot match.
+     */
     private void write(String key, String value) {
-        Setting setting = settingRepository.findByKey(key).orElseGet(() -> new Setting(key, value));
-        setting.setValue(value);
+        String trimmed = value.trim();
+        Setting setting = settingRepository.findByKey(key).orElseGet(() -> new Setting(key, trimmed));
+        setting.setValue(trimmed);
         settingRepository.save(setting);
     }
 

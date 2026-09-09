@@ -98,6 +98,44 @@ class ParseResponseReaderTest {
     }
 
     @Test
+    @DisplayName("Số tiền dạng thập phân được làm tròn chính xác, không qua số thực nhị phân")
+    void roundsDecimalAmountsExactly() {
+        // 45000.5 is not representable in binary floating point; reading it through double would
+        // land a đồng either side. The amount goes on to become a Money, where that is a wrong
+        // number (FR-FIN-06).
+        String json = """
+                {"intent":"TRANSACTION","confidence":0.9,
+                 "transaction":{"type":"EXPENSE","amount":45000.5}}
+                """;
+
+        assertThat(reader.readParse(json, context()).transaction().amount()).isEqualTo(45_001L);
+    }
+
+    @Test
+    @DisplayName("Số tiền lớn không mất độ chính xác")
+    void keepsLargeAmountsExact() {
+        String json = """
+                {"intent":"TRANSACTION","confidence":0.9,
+                 "transaction":{"type":"EXPENSE","amount":9007199254740993}}
+                """;
+
+        assertThat(reader.readParse(json, context()).transaction().amount())
+                .as("Giá trị này vượt quá khả năng biểu diễn nguyên vẹn của double")
+                .isEqualTo(9_007_199_254_740_993L);
+    }
+
+    @Test
+    @DisplayName("Số tiền gửi dưới dạng chuỗi cũng đọc được")
+    void readsAmountsSentAsText() {
+        String json = """
+                {"intent":"TRANSACTION","confidence":0.9,
+                 "transaction":{"type":"EXPENSE","amount":"45000"}}
+                """;
+
+        assertThat(reader.readParse(json, context()).transaction().amount()).isEqualTo(45_000L);
+    }
+
+    @Test
     @DisplayName("T4-16 — thiếu 'intent' thì ném SchemaValidationException")
     void rejectsMissingIntent() {
         assertThatThrownBy(() -> reader.readParse("{\"confidence\":0.9}", context()))

@@ -125,7 +125,13 @@ public class ClaudeAiClient implements AiClient {
         return clients.computeIfAbsent(effective, this::buildClient);
     }
 
-    private AnthropicClient buildClient(Duration timeout) {
+    /**
+     * Builds the SDK client for one timeout.
+     *
+     * <p>Package private rather than private so a test can substitute a client that throws, which is
+     * the only way to exercise the provider-error mapping below without a network round trip.
+     */
+    AnthropicClient buildClient(Duration timeout) {
         return AnthropicOkHttpClient.builder()
                 .apiKey(properties.apiKey())
                 .timeout(timeout)
