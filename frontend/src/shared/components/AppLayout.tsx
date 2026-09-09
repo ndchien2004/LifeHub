@@ -22,7 +22,7 @@ const NAV_ITEMS: {
   { route: 'projects', label: 'Dự án & Nhãn', Icon: FolderKanban, enabled: true, phase: null },
   { route: 'calendar', label: 'Lịch', Icon: CalendarDays, enabled: true, phase: null },
   { route: 'finance', label: 'Tài chính', Icon: Wallet, enabled: true, phase: null },
-  { route: 'settings', label: 'Cài đặt', Icon: Settings, enabled: false, phase: 4 },
+  { route: 'settings', label: 'Cài đặt', Icon: Settings, enabled: true, phase: null },
 ]
 
 export function AppLayout({ children }: { children: ReactNode }) {

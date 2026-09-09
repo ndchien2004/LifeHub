@@ -23,12 +23,28 @@ export interface NavigateRequest {
   id: string
 }
 
+export interface ApiKeyState {
+  hasKey: boolean
+  /** False when the OS has no credential store, so a key cannot outlive the session. */
+  encryptionAvailable: boolean
+}
+
+export interface SetApiKeyResult {
+  /** False when the key works now but could not be written to the credential store. */
+  persisted: boolean
+  hasKey: boolean
+}
+
 export interface LifeHubBridge {
   getBackendInfo(): Promise<BackendInfo>
   onBackendRestarted(listener: (info: BackendInfo) => void): () => void
   getNotificationPermission(): Promise<'granted' | 'denied'>
   onReminderFired(listener: (payload: ReminderFiredPayload) => void): () => void
   onNavigate(listener: (request: NavigateRequest) => void): () => void
+  setApiKey(key: string): Promise<SetApiKeyResult>
+  hasApiKey(): Promise<ApiKeyState>
+  clearApiKey(): Promise<{ hasKey: boolean }>
+  restartBackend(): Promise<BackendInfo>
 }
 
 declare global {

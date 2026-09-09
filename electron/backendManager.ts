@@ -23,6 +23,13 @@ export interface BackendManagerOptions {
   dataDir: string
   /** Directory for rotated log files. */
   logDir: string
+  /**
+   * Supplies the AI API key at spawn time (FR-AI-09).
+   *
+   * A function rather than a value: the user can paste a key into Settings long after launch, and
+   * the next spawn has to pick up whatever is current rather than what was there at construction.
+   */
+  getApiKey?: () => string | null
   /** Called after an automatic restart, so the renderer can retarget the new port. */
   onRestarted?: (info: BackendInfo) => void
   /** Called when the backend is gone for good and the user has to decide what to do. */
@@ -68,11 +75,35 @@ export class BackendManager {
     return this.info
   }
 
+  /**
+   * Restarts the backend on a fresh port and token, resolving once it is healthy again.
+   *
+   * The Settings screen needs this: the API key and the display timezone are both read once at
+   * startup, so changing either only takes effect on the next process.
+   */
+  async restartNow(): Promise<BackendInfo> {
+    this.shuttingDown = true
+    this.child?.kill()
+    this.child = null
+    this.shuttingDown = false
+    this.restartAttempts = 0
+
+    const info = await this.start()
+    this.options.onRestarted?.(info)
+    return info
+  }
+
   /** Stops the backend without triggering the restart policy. */
   stop(): void {
     this.shuttingDown = true
     this.child?.kill()
     this.child = null
+  }
+
+  /** The child's environment, with the API key added when the user has configured one. */
+  private environment(): NodeJS.ProcessEnv {
+    const apiKey = this.options.getApiKey?.() ?? null
+    return apiKey === null || apiKey === '' ? { ...process.env } : { ...process.env, AI_API_KEY: apiKey }
   }
 
   private spawnProcess(info: BackendInfo): void {
@@ -87,8 +118,9 @@ export class BackendManager {
         `--app.log-dir=${this.options.logDir}`,
       ],
       {
-        // AI_API_KEY is added here in Phase 4; it is never written to disk (NFR-SEC-01).
-        env: { ...process.env },
+        // The key travels in the child's environment and nowhere else: never on the command line,
+        // where any process listing would show it, and never in a file (NFR-SEC-01).
+        env: this.environment(),
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true,
       },

@@ -23,6 +23,9 @@ import {
   type TransactionInput,
   type TransactionType,
 } from '../types'
+import { AiFieldHint, aiFieldClass } from '@/features/ai/components/AiFieldHint'
+import { CategorySuggestChips } from '@/features/ai/components/CategorySuggestChips'
+import type { FieldConfidence } from '@/features/ai/types'
 import { AmountInput } from './AmountInput'
 
 /**
@@ -71,12 +74,18 @@ interface TransactionFormDialogProps {
   onOpenChange: (open: boolean) => void
   /** Present when editing; absent when creating. */
   transaction?: Transaction | null
+  /** Prefilled values for a new transaction, e.g. from the AI command palette (FR-AI-06). */
+  defaults?: Partial<TransactionFormValues>
+  /** Per-field AI certainty, which draws the badges beside the labels (UC-09 step 10). */
+  aiConfidence?: FieldConfidence
 }
 
 export function TransactionFormDialog({
   open,
   onOpenChange,
   transaction,
+  defaults,
+  aiConfidence,
 }: TransactionFormDialogProps) {
   const isEditing = Boolean(transaction)
   const { data: walletList } = useWallets()
@@ -96,6 +105,7 @@ export function TransactionFormDialog({
     reset,
     watch,
     setValue,
+    getValues,
     formState: { errors, isSubmitting },
   } = useForm<TransactionFormValues>({
     resolver: zodResolver(transactionSchema),
@@ -104,6 +114,8 @@ export function TransactionFormDialog({
 
   const type = watch('type')
   const walletId = watch('walletId')
+  const categoryId = watch('categoryId')
+  const note = watch('note')
   const selectedTagIds = watch('tagIds') ?? []
   const isTransfer = type === 'TRANSFER'
   const categories = type === 'INCOME' ? incomeCategories : expenseCategories
@@ -116,8 +128,11 @@ export function TransactionFormDialog({
   // Loads the dialog's starting state exactly once per open.
   useEffect(() => {
     if (open) {
-      reset(transaction ? valuesFrom(transaction) : emptyValues())
+      reset(transaction ? valuesFrom(transaction) : { ...emptyValues(), ...defaults })
     }
+    // `defaults` is a fresh object on every render of the caller, so it is deliberately not a
+    // dependency: including it would reset the form under the user mid-edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, transaction, reset])
 
   /*
@@ -132,6 +147,27 @@ export function TransactionFormDialog({
       setValue('walletId', defaultWalletId)
     }
   }, [open, transaction, walletId, defaultWalletId, setValue])
+
+  /*
+   * Re-applies the two select values once their options exist.
+   *
+   * A <select> silently drops a value that has no matching <option> yet, and both lists arrive
+   * after the form has already been reset - so a prefilled wallet or category from the AI palette
+   * would show as empty even though the form still holds it. Writing the same value back once the
+   * options are there is what makes the two agree again.
+   */
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+    const current = getValues()
+    if (current.walletId) {
+      setValue('walletId', current.walletId)
+    }
+    if (current.categoryId) {
+      setValue('categoryId', current.categoryId)
+    }
+  }, [open, wallets, expenseCategories, incomeCategories, getValues, setValue])
 
   // Switching to or from a transfer invalidates whichever of the two fields no longer applies;
   // leaving a stale value behind would send a category with a transfer.
@@ -214,7 +250,10 @@ export function TransactionFormDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="transaction-amount">Số tiền</Label>
+            <Label htmlFor="transaction-amount" className="flex items-center gap-2">
+              Số tiền
+              <AiFieldHint confidence={aiConfidence?.amount} />
+            </Label>
             <Controller
               control={control}
               name="amount"
@@ -226,6 +265,7 @@ export function TransactionFormDialog({
                   onChange={field.onChange}
                   aria-invalid={Boolean(errors.amount)}
                   aria-label="Số tiền"
+                  className={aiFieldClass(aiConfidence?.amount)}
                 />
               )}
             />
@@ -265,9 +305,13 @@ export function TransactionFormDialog({
               </div>
             ) : (
               <div className="space-y-1.5">
-                <Label htmlFor="transaction-category">Danh mục</Label>
+                <Label htmlFor="transaction-category" className="flex items-center gap-2">
+                  Danh mục
+                  <AiFieldHint confidence={aiConfidence?.categoryName} />
+                </Label>
                 <Select
                   id="transaction-category"
+                  className={aiFieldClass(aiConfidence?.categoryName)}
                   {...register('categoryId')}
                   aria-invalid={Boolean(errors.categoryId)}
                 >
@@ -279,15 +323,27 @@ export function TransactionFormDialog({
                   ))}
                 </Select>
                 <FieldError>{errors.categoryId?.message}</FieldError>
+                {/* FR-AI-07: only offered while the field is still empty, which is the moment
+                    UC-10 describes. Once the user has chosen, suggestions are noise. */}
+                <CategorySuggestChips
+                  note={note ?? ''}
+                  type={type === 'INCOME' ? 'INCOME' : 'EXPENSE'}
+                  enabled={open && !isTransfer && !categoryId}
+                  onSelect={(categoryId) => setValue('categoryId', categoryId, { shouldDirty: true })}
+                />
               </div>
             )}
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="transaction-occurred-at">Thời điểm</Label>
+            <Label htmlFor="transaction-occurred-at" className="flex items-center gap-2">
+              Thời điểm
+              <AiFieldHint confidence={aiConfidence?.occurredAt} />
+            </Label>
             <Input
               id="transaction-occurred-at"
               type="datetime-local"
+              className={aiFieldClass(aiConfidence?.occurredAt)}
               {...register('occurredAt')}
               aria-invalid={Boolean(errors.occurredAt)}
             />

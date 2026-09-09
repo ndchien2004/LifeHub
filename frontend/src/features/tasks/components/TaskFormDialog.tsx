@@ -13,6 +13,8 @@ import {
 } from '@/shared/components/ui/dialog'
 import { FieldError, Input, Label, Select, Textarea } from '@/shared/components/ui/input'
 import { cn } from '@/shared/lib/utils'
+import { AiFieldHint, aiFieldClass } from '@/features/ai/components/AiFieldHint'
+import type { FieldConfidence } from '@/features/ai/types'
 import { useCreateTask, useProjects, useTags, useUpdateTask } from '../hooks'
 import { PRIORITIES, PRIORITY_LABELS, type Task, type TaskInput } from '../types'
 
@@ -46,9 +48,20 @@ interface TaskFormDialogProps {
   task?: Task | null
   /** Set when creating a subtask of an existing task (FR-TSK-11). */
   parentId?: string | null
+  /** Prefilled values for a new task, e.g. from the AI command palette (FR-AI-06). */
+  defaults?: Partial<TaskFormValues>
+  /** Per-field AI certainty, which draws the badges beside the labels (UC-09 step 10). */
+  aiConfidence?: FieldConfidence
 }
 
-export function TaskFormDialog({ open, onOpenChange, task, parentId }: TaskFormDialogProps) {
+export function TaskFormDialog({
+  open,
+  onOpenChange,
+  task,
+  parentId,
+  defaults,
+  aiConfidence,
+}: TaskFormDialogProps) {
   const isEditing = Boolean(task)
   const { data: projects = [] } = useProjects()
   const { data: tags = [] } = useTags()
@@ -69,8 +82,11 @@ export function TaskFormDialog({ open, onOpenChange, task, parentId }: TaskFormD
 
   useEffect(() => {
     if (open) {
-      reset(task ? valuesFrom(task) : emptyValues())
+      reset(task ? valuesFrom(task) : { ...emptyValues(), ...defaults })
     }
+    // `defaults` is a fresh object on every render of the caller, so it is deliberately not a
+    // dependency: including it would reset the form under the user mid-edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, task, reset])
 
   const selectedTagIds = watch('tagIds') ?? []
@@ -126,14 +142,18 @@ export function TaskFormDialog({ open, onOpenChange, task, parentId }: TaskFormD
         */}
         <form onSubmit={onSubmit} noValidate className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="title">
-              Tiêu đề <span className="text-destructive">*</span>
+            <Label htmlFor="title" className="flex items-center gap-2">
+              <span>
+                Tiêu đề <span className="text-destructive">*</span>
+              </span>
+              <AiFieldHint confidence={aiConfidence?.title} />
             </Label>
             <Input
               id="title"
               autoFocus
               aria-invalid={Boolean(errors.title)}
               placeholder="Việc cần làm là gì?"
+              className={aiFieldClass(aiConfidence?.title)}
               {...register('title')}
             />
             <FieldError>{errors.title?.message}</FieldError>
@@ -146,8 +166,15 @@ export function TaskFormDialog({ open, onOpenChange, task, parentId }: TaskFormD
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label htmlFor="priority">Độ ưu tiên</Label>
-              <Select id="priority" {...register('priority')}>
+              <Label htmlFor="priority" className="flex items-center gap-2">
+                Độ ưu tiên
+                <AiFieldHint confidence={aiConfidence?.priority} />
+              </Label>
+              <Select
+                id="priority"
+                className={aiFieldClass(aiConfidence?.priority)}
+                {...register('priority')}
+              >
                 {PRIORITIES.map((value) => (
                   <option key={value} value={value}>
                     {PRIORITY_LABELS[value]}
@@ -157,8 +184,16 @@ export function TaskFormDialog({ open, onOpenChange, task, parentId }: TaskFormD
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="dueAt">Ngày đến hạn</Label>
-              <Input id="dueAt" type="datetime-local" {...register('dueAt')} />
+              <Label htmlFor="dueAt" className="flex items-center gap-2">
+                Ngày đến hạn
+                <AiFieldHint confidence={aiConfidence?.dueAt} />
+              </Label>
+              <Input
+                id="dueAt"
+                type="datetime-local"
+                className={aiFieldClass(aiConfidence?.dueAt)}
+                {...register('dueAt')}
+              />
               {isDueInThePast && (
                 <p className="text-xs text-amber-600 dark:text-amber-400">
                   Ngày đến hạn đã qua, bạn có chắc không?
